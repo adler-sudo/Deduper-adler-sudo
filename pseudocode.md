@@ -72,6 +72,23 @@ I still need to evaluate how and when I want to sort the SAM file. This will be 
                 * input:
                     * input_filename="test/inputs/test1.sam"
                     * sorted_filename="test/inputs/test1.sorted.sam"
+
+                    * defined in test example output
+                * output:
+                    * 
+            * return statement:
+                * return None
+        * dedupe(input_filename,retention_filename,duplicate_filename)
+            * description: 
+                * opens file
+                * reads line by line
+                    * utilizing Class2 properly parse
+                * closes file
+            * test examples:
+                * inputs:
+                    * input_filename="test/inputs/test1.sam"
+                    * retention_filename="test/outputs/test1.retain.sam"
+                    * duplicate_filename="test/outputs/test1.discard.sam"
                 * output: 
                     * "Deduped test/inputs/test1.sam"
                     * "Umis pulled from STL96.txt"
@@ -84,22 +101,6 @@ I still need to evaluate how and when I want to sort the SAM file. This will be 
                     * "1 read discarded"
             * return statement:
                 * return print_statment
-                    * defined in test example output
-        * dedupe(input_filename,retention_filename,duplicate_filename)
-            * description: 
-                * opens file
-                * reads line by line
-                    * utilizing Class2 properly parse
-                * closes file
-            * test examples:
-                * inputs:
-                    * input_filename="test/inputs/test1.sam"
-                    * retention_filename="test/outputs/test1.retain.sam"
-                    * duplicate_filename="test/outputs/test1.discard.sam"
-                * outputs:
-                    * None
-            * return statement:
-                * return None
         * read_umis(umi_filename)
             * description: read in the umi file and write to eval_dict
             * test examples:
@@ -123,7 +124,7 @@ I still need to evaluate how and when I want to sort the SAM file. This will be 
         * strand - plus or minus
     * functions:
         * parse_columns(line)
-            * description: pull all information needed from each column
+            * description: pull umi, rname, pos, cigar, flag, and strand from strand and assign to corresponding attributes
             * test examples:
                 * input: 
                     * line=["NS500451:154:HWKTMBGXX:1:11101:21621:1145:AAGGTACG", "0", "2", "93022350", "36", "71M", "*", "0", "0", "TTCCACTGTTGCTTCATAACTGCAGTCCTAACATAAATGTCTGACATGTAGGATGATCTTAAGCAACCCCT","6AEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEE<EEAAAEE"]

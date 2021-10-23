@@ -29,16 +29,16 @@ args = parse_args(sys.argv[1:])
 # define globals
 paired_end = False
 input_file = args.input_file
-print("Input SAM file:", input_file, sep=" ")
 
 # argparser
+if args.input_file is None:
+    exit("ATTENTION: Exiting script!\nPlease specify a sorted SAM file utilizing the input_file flag (-f, --input_file).\n")
 if args.paired_end:
     paired_end = True
-    exit("Apologies! Paired-end functionality not yet included. Please remove paired_end flag (-p, --paired_end). Exiting script.")
+    exit("ATTENTION: Exiting script!\nApologies! Paired-end functionality not yet included. Please remove paired_end flag (-p, --paired_end).\n")
 if args.umi:
     umis = args.umi
-    print("UMI file:", umis, sep=" ")
 else:
-    exit("Apologies! Randomer functionality not yet included. Please utilize umi flag (-u, --umi) and specify UMI file. Exiting script.")
+    exit("ATTENTION: Exiting script!\nApologies! Randomer UMI functionality not yet included. Please utilize umi flag (-u, --umi) and specify UMI file.\n")
 
 

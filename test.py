@@ -19,7 +19,6 @@ retention_filename = test_output_actual_dir + "/helloworld.retain.sam"
 duplicate_filename = test_output_actual_dir + "helloworld.discard.sam"
 read_length = 150
 
-test_SAM_read = "NS500451:154:HWKTMBGXX:1:11101:21621:1145:AGGTTGCT	0	2	93022350	36	2S89M	*	0	0	TTCCACTGTTGCTTCATAACTGCAGTCCTAACATAAATGTCTGACATGTAGGATGATCTTAAGCAACCCCT	6AEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEE<EEAAAEE"
 
 # parse args for testing different test scenarios
 # TODO: if we move this to sam_funcs then we can just import it
@@ -61,14 +60,12 @@ test_samfile_class = SamFile(
     read_length=read_length
 )
 
-test_samread_class = SamRead(
-    test_SAM_read
-)
 
 # assert that attributes are being assigned correctly
 assert test_samfile_class.input_filename == input_filename, "Issue with test_samfile_class input_filename attribute"
 assert test_samfile_class.umi_filename == umi_filename, "Issue with test_samfile_class umi_filename attribute"
 
+test_samread_class = SamRead()
 
 def test_read_umis():
     eval_dict = {
@@ -90,23 +87,38 @@ def test_dedupe():
         assert filecmp.cmp(duplicate_filename,duplicate_comp_filename), "Error in {}".format(duplicate_filename)
 test_dedupe()
 
+def test_reset_eval_dict():
+    test_eval_dict = {
+        "hello": [],
+        "world": []
+    }
+    test_eval_dict2 = {
+        "hello": [(1,"+")],
+        "world": [(2,"+")],
+    }
+    assert test_samfile_class.reset_eval_dict(test_eval_dict) == test_eval_dict, "SamFile reset_eval_dict method not properly resetting dictionary."
+    assert test_samfile_class.reset_eval_dict(test_eval_dict2) == test_eval_dict, "SamFile reset_eval_dict method not properly resetting dictionary."
+test_reset_eval_dict()
+
 def test_parse_columns():
-    assert test_samread_class.qname == test_SAM_read.split("\t")[0], "Issue with SamRead method parse_columns"
+    sample_sam_line = "NS500451:154:HWKTMBGXX:1:11101:21621:1145:AGGTTGCT	0	2	93022350	36	2S89M	*	0	0	TTCCACTGTTGCTTCATAACTGCAGTCCTAACATAAATGTCTGACATGTAGGATGATCTTAAGCAACCCCT	6AEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEE<EEAAAEE"
+    test_samread_class.set_read(sample_sam_line)
+    assert test_samread_class.qname == sample_sam_line.split("\t")[0], "Issue with SamRead method parse_columns"
 test_parse_columns()
 
 def test_correct_start_position():
-    test_samread_class.correct_start_position(10,"2S","+")
-    assert test_samread_class.pos == 8, "SamRead correct_start_position method making error on forward strand."
-
-    test_samread_class.correct_start_position(10,"2M","+")
-    assert test_samread_class.pos == 10, "SamRead correct_start_position method incorrectly adjusting start position."
-
-    test_samread_class.correct_start_position(10,"2S","-")
-    assert test_samread_class.pos == 8, "SamRead correct_start_position method making error on reverse strand."
+    assert test_samread_class.correct_start_position(10,"2S","+") == 8, "SamRead correct_start_position method making error on forward strand."
+    assert test_samread_class.correct_start_position(10,"2M","+") == 10, "SamRead correct_start_position method incorrectly adjusting start position."
+    assert test_samread_class.correct_start_position(10,"2S","-") == 12, "SamRead correct_start_position method making error on reverse strand."
 test_correct_start_position()
 
 def test_generate_postrand():
-    postrand = test_samread_class.generate_postrand(10,"+") == (10,"+"), "SamRead generate_postrand method making error in tuple generation."
+    assert test_samread_class.generate_postrand(10,"+") == (10,"+"), "SamRead generate_postrand method generating tuple incorrectly."
 test_generate_postrand()
+
+def test_determine_strandedness():
+    assert test_samread_class.determine_strandedness(16) == "-", "SamRead determine_strandedness marking strand as forward when it should be reverse."
+    assert test_samread_class.determine_strandedness(15) == "+", "SamRead determine_strandedness marking strand as reverse when it should be forward."
+test_determine_strandedness()
 
 print("All tests passed!")

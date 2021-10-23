@@ -105,26 +105,42 @@ class SamFile():
 
         self.deduped = True
 
-    def reset_eval_dict(self):
+    def reset_eval_dict(
+        self,
+        eval_dict=None):
         """
         resets the values of the eval dict to empty lists
         """
+        # unittest functionality
+        if eval_dict is not None:
+            self.eval_dict = eval_dict
+
         self.eval_dict = {k:[] for k in self.eval_dict}
 
-class SamRead:
-    def __init__(self,line:list):
-        self.line = line.split('\t')
-        self.qname = None
-        self.umi = None
-        self.rname = None
-        self.pos = None
-        self.cigar = None
-        self.flag = None
-        self.strand = None
-        self.postrand = None
+        return self.eval_dict
 
-        self.parse_columns()
-        self.determine_strandedness()
+class SamRead:
+    def __init__(
+        self,
+        line=None):
+        
+        if line is not None:
+            self.line = line.split('\t')
+            self.parse_columns()
+            self.determine_strandedness()
+
+    def set_read(
+        self,
+        line=None):
+        """
+        sets the sam read
+        """
+        if line is not None:
+            self.line = line.split('\t')
+
+            self.parse_columns()
+            self.determine_strandedness()
+            return self.line
 
     def parse_columns(self):
         self.qname = self.line[0]
@@ -161,10 +177,12 @@ class SamRead:
             correction = int(self.cigar.split('S')[0])
         
             # add if reverse, subtract if forward
-            if self.strand == 1:
-                self.pos = self.pos + correction
-            else:
+            if self.strand == "+":
                 self.pos = self.pos - correction
+            else:
+                self.pos = self.pos + correction
+
+        return self.pos
 
     def generate_postrand(
         self,
@@ -184,14 +202,21 @@ class SamRead:
 
         self.postrand = (self.pos, self.strand)
 
-        return(self.postrand)
+        return self.postrand
 
-    def determine_strandedness(self):
+    def determine_strandedness(
+        self,
+        flag=None):
         """
         determines strandedness by looking at 16 of bitwise flag
         """
-        
+        # unittest functionality
+        if flag is not None:
+            self.flag = flag
+
         if ((self.flag & 16) == 16):
             self.strand = "-" # reverse
         else:
             self.strand = "+" # forward
+        
+        return self.strand

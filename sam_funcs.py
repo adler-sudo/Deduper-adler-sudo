@@ -1,59 +1,155 @@
+from Bioinfo import convert_phred, qual_score
+
+
 # define clases
-class SamFile():
+class Dedupe():
     def __init__(
         self, 
-        input_filename:str='samp.sort.sam', 
-        umi_filename:str='STL96.txt', 
-        retention_filename:str='helloworld.retain.sam',
-        duplicate_filename:str='helloworld.discard.sam',
-        read_length:int=150
-        ):
+        input_filename=None, 
+        umi_filename=None, 
+        retention_filename=None,
+        read_length=150,
+        keep_highest_qscore=False):
+
         self.input_filename = input_filename
         self.umi_filename = umi_filename
         self.retention_filename = retention_filename
-        self.duplicate_filename = duplicate_filename
         self.read_length = int(read_length)
+        
         self.total_reads = 0
         self.num_reads_retained = 0
         self.num_reads_discarded = 0
-        self.eval_dict = {}
-        self.umis_read = False
-        self.deduped = False
         self.current_chr = 1
+        self.eval_dict = {}
 
+        self.keep_highest_qscore = keep_highest_qscore
+
+        self.umis_read = False
+        self.randomer_umi = True
+        self.umis = None
+
+        self.deduped = False
+        
         self.read_umis()
 
-    def read_umis(self):
+    def read_umis(
+        self):
         """
         reads and stores umis
         """
-        open_umis = open(self.umi_filename,'r')
-        umis = open_umis.read().split('\n')
-        
-        # add umis to the eval dictionary
-        for umi in umis:
-            if umi != '': # in case there is trailing newline
-                self.eval_dict[umi] = []
-        
-        open_umis.close()
+        # umi file specified
+        # if self.umi_filename is not None:
+        #     open_umis = open(self.umi_filename,'r')
+        #     umis = open_umis.read().split('\n')
+        #     # add umis to the eval dictionary
+        #     for umi in umis:
+        #         if umi != '': # in case there is trailing newline
+        #             self.eval_dict[umi] = {}
+        #     open_umis.close()
+        #     self.umis_read = True
+        if self.umi_filename is not None:
+            open_umis = open(self.umi_filename,'r')
+            self.umis = open_umis.read().split('\n')
+        # randomer umis
+        self.randomer_umi = True
 
-        self.umis_read = True
+        return self.randomer_umi
 
-    def write_to_retain(self, line):
+    def write_to_retain(
+        self, 
+        line):
         """
         writes line to retain
         """
         self.open_retain_sam.write(line)
 
-    def write_to_discard(self, line):
+    def evaluate_existence(
+        self,
+        postrand=None,
+        umi=None,
+        qscore=None,
+        raw_line=None,
+        eval_dict=None,
+        randomer_umi=None,
+        keep_highest_qscore=None):
         """
-        writes line to discard
-        """
-        self.open_discard_sam.write(line)
+        evaluates if read has already been retained
 
-    # TODO: still need to complete this
-    def write_to_eval_dict(self):
-        return None
+        postrand, umi, and qscore will be passed from samread class
+
+        returns True if unique
+        returns False if duplicate
+        """
+        if eval_dict is not None:
+            self.eval_dict = eval_dict
+        if randomer_umi is not None:
+            self.randomer_umi = randomer_umi
+        if keep_highest_qscore is not None:
+            self.keep_highest_qscore = keep_highest_qscore
+        
+        # TODO: think i can make this simpler but not seeing it now
+        if self.randomer_umi:
+            if postrand not in self.eval_dict:
+                # TODO: this should really be its own function
+                self.write_to_eval_dict(
+                        postrand=postrand,
+                        qscore=qscore,
+                        raw_line=raw_line)
+            elif self.keep_highest_qscore and self.eval_dict[postrand]['qscore'] < qscore:
+                self.write_to_eval_dict(
+                        postrand=postrand,
+                        qscore=qscore,
+                        raw_line=raw_line)
+            else:
+                return True
+        else:
+            if umi in self.umis:
+                if postrand not in self.eval_dict:
+                    # TODO: this should really be its own function
+                    self.write_to_eval_dict(
+                        postrand=postrand,
+                        qscore=qscore,
+                        raw_line=raw_line)
+                elif self.keep_highest_qscore and eval_dict[postrand]['qscore'] < qscore:
+                    self.write_to_eval_dict(
+                        postrand=postrand,
+                        qscore=qscore,
+                        raw_line=raw_line)
+                    print("higher quality read encountered")
+                else:
+                    return True
+            else:
+                return True
+
+        return False
+
+    def dump_dict_to_sam(
+        self,
+        eval_dict=None):
+        """
+        write the eval_dict to the retain sam file
+        """
+
+        if eval_dict is not None:
+            self.eval_dict = eval_dict
+
+        for record in self.eval_dict:
+            line = self.eval_dict[record]['line']
+            self.write_to_retain(line)
+
+    def write_to_eval_dict(
+        self,
+        postrand=None,
+        qscore=None,
+        raw_line=None,
+        eval_dict=None):
+        
+        if eval_dict is not None:
+            self.eval_dict = eval_dict
+
+        self.eval_dict[postrand] = {'qscore':qscore,'line':raw_line}
+
+        return self.eval_dict
 
     def dedupe(self):
         """
@@ -61,49 +157,61 @@ class SamFile():
         """
         self.open_input_sam = open(self.input_filename,'r')
         self.open_retain_sam = open(self.retention_filename,'w')
-        self.open_discard_sam = open(self.duplicate_filename,'w')
+        # self.open_discard_sam = open(self.duplicate_filename,'w')
 
         while True:
             line = self.open_input_sam.readline()
             
             if line == '': # break if end of file
+                self.dump_dict_to_sam() # dump last chromosome to sam
+                self.num_reads_retained += len(self.eval_dict)
                 break
 
             if line[0] == '@': # store header lines
-                self.write_to_retain(line)
-                self.write_to_discard(line)
+                self.write_to_retain(
+                    line=line
+                )
+                # self.write_to_discard(line)
                 continue
             
             self.total_reads += 1 # made it through all evalutation steps
 
-            read = SamRead(line)
+            read = SamRead(
+                raw_line=line
+            )
             read.correct_start_position()
             read.generate_postrand()
 
             # reset dictionary if we've reached a new chromosome
             if int(read.rname) != int(self.current_chr):
                 self.current_chr = int(read.rname)
-                self.reset_eval_dict()
+                self.dump_dict_to_sam(
+                    eval_dict=self.eval_dict
+                )
+                self.reset_eval_dict(
+                    eval_dict=self.eval_dict
+                )
 
             # if erroneous umi, write to discard 
             # TODO: challenge is to make correction 
-            if read.umi not in self.eval_dict:
-                self.write_to_discard(line)
-                self.num_reads_discarded += 1
-            # if new read, add to dictionary and write to retain file
-            elif read.postrand not in self.eval_dict[read.umi]:
-                self.eval_dict[read.umi].append(read.postrand)
-                self.write_to_retain(line)
-                self.num_reads_retained += 1
-            else:
-                self.write_to_discard(line)
-                self.num_reads_discarded += 1
+            self.evaluate_existence(
+                postrand=read.postrand, 
+                umi=read.umi, 
+                qscore=read.qscore,
+                raw_line=read.raw_line,
+                eval_dict=self.eval_dict, 
+                randomer_umi=self.randomer_umi
+            )
 
         self.open_input_sam.close()
         self.open_retain_sam.close()
-        self.open_discard_sam.close()
+        # self.open_discard_sam.close()
 
         self.deduped = True
+
+    def evaluate_qscore(
+        self):
+        return None
 
     def reset_eval_dict(
         self,
@@ -115,28 +223,42 @@ class SamFile():
         if eval_dict is not None:
             self.eval_dict = eval_dict
 
-        self.eval_dict = {k:[] for k in self.eval_dict}
-
+        # self.eval_dict = {k:[] for k in self.eval_dict}
+        # return self.eval_dict
+        self.eval_dict = {}
         return self.eval_dict
 
 class SamRead:
     def __init__(
         self,
-        line=None):
+        raw_line=None):
+
+        self.raw_line = None
+        self.line = None
+        self.qname = None
+        self.umi = None
+        self.flag = None
+        self.rname = None
+        self.pos = None
+        self.corrected_pos = None
+        self.cigar = None
+        self.qscore = None
         
-        if line is not None:
-            self.line = line.split('\t')
+        # unitest fuctionality
+        if raw_line is not None:
+            self.raw_line = raw_line
+            self.line = self.raw_line.split('\t')
             self.parse_columns()
             self.determine_strandedness()
 
     def set_read(
         self,
-        line=None):
+        raw_line=None):
         """
         sets the sam read
         """
-        if line is not None:
-            self.line = line.split('\t')
+        if raw_line is not None:
+            self.line = raw_line.split('\t')
 
             self.parse_columns()
             self.determine_strandedness()
@@ -149,6 +271,7 @@ class SamRead:
         self.rname = self.line[2]
         self.pos = int(self.line[3])
         self.cigar = self.line[5]
+        self.qscore = qual_score(self.line[10])
 
     def correct_start_position(
         self,
@@ -159,13 +282,14 @@ class SamRead:
         corrects start position using cigar string
         """
 
+        # initiate corrected postiion
+        self.corrected_pos = self.pos
+
         # unittesting functionality
         if current_position is not None:
-            self.pos = current_position
-        
+            self.corrected_pos = current_position
         if cigar_string is not None:
             self.cigar = cigar_string
-
         if strand is not None:
             self.strand = strand
 
@@ -178,30 +302,30 @@ class SamRead:
         
             # add if reverse, subtract if forward
             if self.strand == "+":
-                self.pos = self.pos - correction
+                self.corrected_pos = self.corrected_pos - correction
             else:
-                self.pos = self.pos + correction
-
-        return self.pos
+                self.corrected_pos = self.corrected_pos + correction
+        return self.corrected_pos
 
     def generate_postrand(
         self,
-        position=None,
-        strand=None):
+        corrected_pos=None,
+        strand=None,
+        umi=None):
         """
         generates position, read combo for current read. To be used
         in evaluating whether duplicate or not.
         """
 
         # unittest functionality
-        if position is not None:
-            self.pos = position
-
+        if corrected_pos is not None:
+            self.corrected_pos = corrected_pos
         if strand is not None:
             self.strand = strand
+        if umi is not None:
+            self.umi = umi
 
-        self.postrand = (self.pos, self.strand)
-
+        self.postrand = (self.corrected_pos, self.strand, self.umi)
         return self.postrand
 
     def determine_strandedness(
@@ -213,10 +337,8 @@ class SamRead:
         # unittest functionality
         if flag is not None:
             self.flag = flag
-
         if ((self.flag & 16) == 16):
             self.strand = "-" # reverse
         else:
             self.strand = "+" # forward
-        
         return self.strand

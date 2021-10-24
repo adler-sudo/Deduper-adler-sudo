@@ -37,22 +37,11 @@ class Dedupe():
         """
         reads and stores umis
         """
-        # umi file specified
-        # if self.umi_filename is not None:
-        #     open_umis = open(self.umi_filename,'r')
-        #     umis = open_umis.read().split('\n')
-        #     # add umis to the eval dictionary
-        #     for umi in umis:
-        #         if umi != '': # in case there is trailing newline
-        #             self.eval_dict[umi] = {}
-        #     open_umis.close()
-        #     self.umis_read = True
         if self.umi_filename is not None:
             open_umis = open(self.umi_filename,'r')
             self.umis = open_umis.read().split('\n')
         # randomer umis
         self.randomer_umi = True
-
         return self.randomer_umi
 
     def write_to_retain(
@@ -120,7 +109,6 @@ class Dedupe():
                     return True
             else:
                 return True
-
         return False
 
     def dump_dict_to_sam(
@@ -146,9 +134,7 @@ class Dedupe():
         
         if eval_dict is not None:
             self.eval_dict = eval_dict
-
         self.eval_dict[postrand] = {'qscore':qscore,'line':raw_line}
-
         return self.eval_dict
 
     def dedupe(self):
@@ -161,19 +147,16 @@ class Dedupe():
 
         while True:
             line = self.open_input_sam.readline()
-            
             if line == '': # break if end of file
                 self.dump_dict_to_sam() # dump last chromosome to sam
                 self.num_reads_retained += len(self.eval_dict)
                 break
-
             if line[0] == '@': # store header lines
                 self.write_to_retain(
                     line=line
                 )
                 # self.write_to_discard(line)
                 continue
-            
             self.total_reads += 1 # made it through all evalutation steps
 
             read = SamRead(

@@ -22,13 +22,20 @@ def parse_args(args):
         "-u", 
         "--umi", 
         help="Designates UMI file. If set, UMI file should follow flag. If flag is not set, the program will assume randomer UMI")
+    parser.add_argument(
+        "-q",
+        "--keep_highest_qscore",
+        action="store_true",
+        help="When flag is set, if the program finds a PCR duplicate, it will keep the duplicate with the highest qscore."
+    )
     return parser.parse_args(args)
 
 args = parse_args(sys.argv[1:])
 
 # define globals
 paired_end = False
-input_file = args.input_file
+input_filename = args.input_file
+umi_filename = args.umi
 
 # argparser
 if args.input_file is None:
@@ -36,9 +43,18 @@ if args.input_file is None:
 if args.paired_end:
     paired_end = True
     exit("ATTENTION: Exiting script!\nApologies! Paired-end functionality not yet included. Please remove paired_end flag (-p, --paired_end).\n")
-if args.umi:
-    umis = args.umi
+
+# keep highest qscore
+if args.keep_highest_qscore:
+    keep_highest_qscore=args.keep_highest_qscore
 else:
-    exit("ATTENTION: Exiting script!\nApologies! Randomer UMI functionality not yet included. Please utilize umi flag (-u, --umi) and specify UMI file.\n")
+    keep_highest_qscore=False
 
-
+# instantiate Dedupe class
+dedupe_me = Dedupe(
+    input_filename=input_filename,
+    umi_filename=umi_filename,
+    retention_filename="helloworld.retain.sam",
+    duplicate_filename="helloworld.retain.sam",
+    keep_highest_qscore=keep_highest_qscore
+)

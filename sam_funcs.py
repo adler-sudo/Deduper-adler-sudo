@@ -3,13 +3,33 @@ from Bioinfo import convert_phred, qual_score
 
 # define clases
 class Dedupe():
+    """
+    A class to remove PCR duplicates from a SAM file.
+
+    Parameters
+    ----------
+    input_filename : str
+        Defines the input filename. Must be sorted SAM format.
+
+    umi_filename : str
+        Defines the input file containing all UMIs. Txt file with each line representing a new umi.
+
+    retention_filename : str
+        Defines the output file with PCR duplicates removed. Should be SAM file. 
+
+    read_length : int
+        Length of each read.
+
+    keep_highest_qscore : bool, default False
+        When marked as True, will keep highest quality read in the case of PCR duplicate. Default activity is to keep first read encountered.
+    """
     def __init__(
         self, 
-        input_filename=None, 
-        umi_filename=None, 
-        retention_filename=None,
-        read_length=150,
-        keep_highest_qscore=False):
+        input_filename:str=None, 
+        umi_filename:str=None, 
+        retention_filename:str=None,
+        read_length:int=150,
+        keep_highest_qscore:bool=False):
 
         self.input_filename = input_filename
         self.umi_filename = umi_filename
@@ -33,9 +53,24 @@ class Dedupe():
         self.read_umis()
 
     def read_umis(
-        self):
+        self,
+        umi_filename:str=None):
         """
-        reads and stores umis
+        Reads UMI file and stores in umis instance attribute.
+
+        Parameters:
+        -----------
+
+        umi_filename : str
+            Filename of UMI. Should exist as .txt file with each UMI on newline.
+
+        Returns:
+        --------
+
+        self.randomer_umi : bool
+            Returns True when UMI file is NOT defined, and therefore UMIs will be treated as randomers.
+            Returns False when UMI file IS defined.
+
         """
         if self.umi_filename is not None:
             open_umis = open(self.umi_filename,'r')
@@ -45,29 +80,88 @@ class Dedupe():
         return self.randomer_umi
 
     def write_to_retain(
-        self, 
-        line):
+        self,
+        line:str=None):
         """
-        writes line to retain
+        Writes a line to the retain file.
+
+        Parameters:
+        -----------
+        
+        retain_filename : str
+            Defines the path to the deduped SAM file.
+
+        line : str
+            The raw line to be written.
+
+        Returns:
+        --------
+
+        None
+
         """
+
+
         self.open_retain_sam.write(line)
+        return None
 
     def evaluate_existence(
         self,
-        postrand=None,
-        umi=None,
-        qscore=None,
-        raw_line=None,
-        eval_dict=None,
-        randomer_umi=None,
-        keep_highest_qscore=None):
+        postrand:tuple=None,
+        umi:str=None,
+        qscore:float=None,
+        raw_line:str=None,
+        eval_dict:dict=None,
+        randomer_umi:bool=None,
+        keep_highest_qscore:bool=None):
         """
-        evaluates if read has already been retained
+        Evaluates if read already exists in eval_dict. Writes read to dictionary and output file if it does not already exist.
 
-        postrand, umi, and qscore will be passed from samread class
+        Parameters:
+        -----------
 
-        returns True if unique
-        returns False if duplicate
+        postrand : tuple
+            A tuple containing cigar-corrected-position, stand, and umi.
+
+            Example:
+            --------
+
+            (100, "+", "ATGCATGC")
+
+        umi : str
+            Contains the UMI sequence for the current read.
+
+        qscore : float
+            The quality score of the current read.
+
+        raw_line : str
+            The raw, tab-delimited line.
+
+        eval_dict : dict
+            Evaluation dict containing record of reads that have been written to the retention file.
+
+            The structure of the dictionary is:
+                {
+                    (self.correct_pos, self.strand, self.umi): {
+                        'qscore': float
+                        'line': raw_line
+                    }
+                }
+
+        randomer_umi : bool
+            Set to True when no UMI file is specified.
+            Set to False when UMI file is specified.
+
+        keep_highest_score : bool
+            When set to True, will keep the highest qscore in the case of PCR duplicates.
+            When set to False, will keep the first read encountered in the case of PCR duplicates.
+
+
+        Returns:
+        --------
+        True when read already exists in eval_dict OR if UMI is not a valid UMI in the case that the UMI file is specified.
+        False when read does not exist in eval_dict OR if current read is a PCR duplicate BUT has a higher qscore than the current resident.
+
         """
         if eval_dict is not None:
             self.eval_dict = eval_dict
@@ -127,19 +221,55 @@ class Dedupe():
 
     def write_to_eval_dict(
         self,
-        postrand=None,
-        qscore=None,
-        raw_line=None,
-        eval_dict=None):
-        
+        postrand:tuple=None,
+        qscore:float=None,
+        raw_line:str=None,
+        eval_dict:dict=None):
+
+        """
+        Writes the current read to the eval_dict. Could be making a new entry or overwriting an existing entry.
+
+        Parameters:
+        -----------
+
+        postrand : tuple
+            A tuple containing cigar-corrected-position, stand, and umi.
+
+        qscore : float
+            The quality score of the current read.
+
+        raw_line : str
+            The raw, tab-delimited line.
+
+        eval_dict : dict
+            Evaluation dict containing record of reads that have been written to the retention file.
+
+            The structure of the dictionary is:
+                {
+                    (self.correct_pos, self.strand, self.umi): {
+                        'qscore': float
+                        'line': raw_line
+                    }
+                }
+
+        Returns:
+        --------
+
+        self.eval_dict : dict
+            Returns the eval_dict. Really only for the purpose of unittesting.S
+
+
+        """
+        # unittest functionality
         if eval_dict is not None:
             self.eval_dict = eval_dict
+        # make eval_dict addition
         self.eval_dict[postrand] = {'qscore':qscore,'line':raw_line}
         return self.eval_dict
 
     def dedupe(self):
         """
-        deduplicats the input sam file
+        Deduplicataes the input SAM file.
         """
         self.open_input_sam = open(self.input_filename,'r')
         self.open_retain_sam = open(self.retention_filename,'w')
@@ -198,9 +328,34 @@ class Dedupe():
 
     def reset_eval_dict(
         self,
-        eval_dict=None):
+        eval_dict:dict=None):
         """
-        resets the values of the eval dict to empty lists
+        Empties the dictionary.
+
+        Parameters:
+        -----------
+
+        eval_dict : dict
+            The dict to be emptied.
+
+            The structure of the dictionary is:
+                {
+                    (self.correct_pos, self.strand, self.umi): {
+                        'qscore': float
+                        'line': raw_line
+                    }
+                }
+
+        Returns:
+        --------
+
+        self.eval_dict : dict
+            The empty dictionary.
+
+            The structure of the dictionary is:
+            {}
+
+
         """
         # unittest functionality
         if eval_dict is not None:

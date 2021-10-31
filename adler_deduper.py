@@ -54,7 +54,8 @@ else:
 dedupe_me = Dedupe(
     input_filename=input_filename,
     umi_filename=umi_filename,
-    retention_filename="helloworld.retain.sam",
-    duplicate_filename="helloworld.retain.sam",
+    retention_filename="C1_SE_uniqAlign.retain.sam", # TODO: remove declaration here - shift to argparse
+    # duplicate_filename="C1_SE_uniqAlign.retain.sam",
     keep_highest_qscore=keep_highest_qscore
 )
+dedupe_me.dedupe()

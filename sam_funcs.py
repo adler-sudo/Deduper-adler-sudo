@@ -1,4 +1,5 @@
 from Bioinfo import convert_phred, qual_score
+import re
 
 
 # define clases
@@ -409,15 +410,34 @@ class SamRead:
         self.rname = self.line[2]
         self.pos = int(self.line[3])
         self.cigar = self.line[5]
+        self.rnext = self.line[6]
         self.qscore = qual_score(self.line[10])
 
     def correct_start_position(
         self,
-        current_position=None, 
-        cigar_string=None,
-        strand=None):
+        current_position:int=None, 
+        cigar_string:str=None,
+        strand:str=None):
         """
-        corrects start position using cigar string
+        Corrects start positiong using cigar string.
+
+        Parameters:
+        -----------
+
+        current_position : int
+            The position from the SAM file for the current read.
+
+        cigar_string : str
+            The cigar string from the SAM file for the current read.
+
+        strand : str
+            The strand position from the SAM file for the current read.
+
+        Returns:
+        --------
+        self.corrected_pos : int
+            The corrected position based on the input parameters
+            
         """
 
         # initiate corrected postiion
@@ -432,17 +452,33 @@ class SamRead:
             self.strand = strand
 
         # evaluate if soft clipping present
-        temp_cigar = [c for c in self.cigar if not c.isdigit()]
+        cigar_nums, cigar_letters = self.parse_cigar_string(
+            cigar=self.cigar
+        )
+        minus_strand_map = {
+            'D': +1,
+            'I': -1,
+            'M': +1,
+            'S': +1,
+            'N': +1,
+        }
 
-        # make correction if there is a soft clip
-        if temp_cigar[0] == 'S':
-            correction = int(self.cigar.split('S')[0])
-        
-            # add if reverse, subtract if forward
-            if self.strand == "+":
+        # amake position correction based on cigar string
+        if self.strand == "+":
+            # just have to subtract on the forward
+            if cigar_letters[0] == 'S':
+                correction = cigar_nums[0]
                 self.corrected_pos = self.corrected_pos - correction
-            else:
-                self.corrected_pos = self.corrected_pos + correction
+        elif self.strand == "-":
+            # TODO: need to actually take the whole cigar string into account on the reverse
+            if cigar_letters[0] == 'S':
+                cigar_letters.pop(0) # ignore the first soft clip if reverse cause this is referring to the 3' end
+                cigar_nums.pop(0)
+            if len(cigar_letters) > 0:
+                cigar_letters = [*map(minus_strand_map.get,cigar_letters)]
+                cigar_nums = [map_val * distance for map_val, distance in zip(cigar_letters,cigar_nums)]
+                correction = sum(list(map(int,cigar_nums))) # convert to ints before summing
+                self.corrected_pos = self.corrected_pos + correction # could put minus one here, but as long as it's consistent it doesn't matter
         return self.corrected_pos
 
     def generate_postrand(
@@ -480,3 +516,67 @@ class SamRead:
         else:
             self.strand = "+" # forward
         return self.strand
+
+    def determine_if_mapped(
+        self,
+        flag:int=None):
+        """
+        Determines if read is mapped using bit 4 of the bitwise flag
+
+        Parameters:
+        -----------
+
+        flag : int
+            Bitwise flag of current read.
+
+        Returns:
+        --------
+
+        mapped : bool
+            True if read is mapped.
+            False is read is unmapped.
+
+        """
+        # unittest functionality
+        if flag is not None:
+            self.flag = flag
+        if ((self.flag) & 4):
+            self.mapped = False
+        else:
+            self.mapped = True
+        return self.mapped
+
+    def parse_cigar_string(
+        self,
+        cigar:str=None):
+        """
+        Parse cigar string into corresponding numbers and letters.
+
+        Parameters:
+        -----------
+        
+        cigar : str
+            Cigar string from current SAM file read.
+
+        Returns:
+        --------
+
+        cigar_nums : list
+            The parsed out cigar numbers
+
+        cigar_letters : list
+            The parsed out cigar letters
+
+        """
+        # unittest functionality
+        if cigar is not None:
+            self.cigar = cigar
+        # parse into components
+        cigar_nums = re.split("[A-Z]",self.cigar)
+        cigar_nums.remove("")
+        cigar_nums = [int(num) for num in cigar_nums]
+        cigar_letters = re.split("[0-9]+",self.cigar)
+        cigar_letters.remove("")
+        return cigar_nums, cigar_letters
+
+

@@ -1,0 +1,16 @@
+#!/bin/bash
+
+#SBATCH --account=bgmp
+#SBATCH --partition=bgmp
+#SBATCH --time=10:00:00
+
+# activate conda env
+conda activate deduper
+
+# define files
+input_file="C1_SE_uniqAlign.sam"
+umi_file="STL96.txt"
+
+# run deduper script
+/usr/bin/time -v ./adler_deduper.py -f $input_file \
+    -u $umi_file

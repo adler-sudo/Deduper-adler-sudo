@@ -30,7 +30,8 @@ class Dedupe():
         umi_filename:str=None, 
         retention_filename:str=None,
         read_length:int=150,
-        keep_highest_qscore:bool=False):
+        keep_highest_qscore:bool=False,
+        paired_end:bool=None):
 
         self.input_filename = input_filename
         self.umi_filename = umi_filename
@@ -40,18 +41,55 @@ class Dedupe():
         self.total_reads = 0
         self.num_reads_retained = 0
         self.num_reads_discarded = 0
-        self.current_chr = 1
+        self.current_chr = '1'
         self.eval_dict = {}
 
         self.keep_highest_qscore = keep_highest_qscore
 
         self.umis_read = False
-        self.randomer_umi = True
+        self.randomer_umi = False
         self.umis = None
+        self.incorrect_umi = 0
 
         self.deduped = False
+
+        self.paired_end = False
+        self.paired_end_dict = {}
+
+        self.summary_dict = {}
         
-        self.read_umis()
+        if not self.randomer_umi:
+            self.read_umis(
+                umi_filename=self.umi_filename
+            )
+
+    def write_to_paired_end_dict(
+        self,
+        paired_end_dict:dict=None):
+        """
+        Write to the paired end dictionary.
+
+        Parameters:
+        -----------
+
+        paired_end_dict : dict
+            The paired-end dictionary.
+
+            Structure:
+            ----------
+
+            {
+                rnext: {
+                    'read_num': 'R1' or 'R2',
+                    'partner_key': eval_dict key belonging to mate (self.correct_pos, self.strand, self.umi)
+                }
+
+        Returns:
+        --------
+
+        paired-end dictionary.
+
+        """
 
     def read_umis(
         self,
@@ -76,8 +114,7 @@ class Dedupe():
         if self.umi_filename is not None:
             open_umis = open(self.umi_filename,'r')
             self.umis = open_umis.read().split('\n')
-        # randomer umis
-        self.randomer_umi = True
+            open_umis.close()
         return self.randomer_umi
 
     def write_to_retain(
@@ -104,6 +141,14 @@ class Dedupe():
 
 
         self.open_retain_sam.write(line)
+        return None
+
+    # TODO: write this function
+    def evaluate_pair_existence(
+        self):
+        """
+        Evaluates if pair has already been found. Performs proper steps in reading and writing to the paired_end_dict.
+        """
         return None
 
     def evaluate_existence(
@@ -146,6 +191,7 @@ class Dedupe():
                     (self.correct_pos, self.strand, self.umi): {
                         'qscore': float
                         'line': raw_line
+
                     }
                 }
 
@@ -203,6 +249,7 @@ class Dedupe():
                 else:
                     return True
             else:
+                self.incorrect_umi += 1 # TODO: add unittest for this
                 return True
         return False
 
@@ -270,23 +317,30 @@ class Dedupe():
 
     def dedupe(self):
         """
-        Deduplicataes the input SAM file.
+        Deduplicates the input SAM file.
         """
         self.open_input_sam = open(self.input_filename,'r')
         self.open_retain_sam = open(self.retention_filename,'w')
         # self.open_discard_sam = open(self.duplicate_filename,'w')
+        self.header_length = 0
 
         while True:
             line = self.open_input_sam.readline()
             if line == '': # break if end of file
-                self.dump_dict_to_sam() # dump last chromosome to sam
                 self.num_reads_retained += len(self.eval_dict)
+                # write last chromosome to summary dict
+                self.summary_dict[self.current_chr] = len(self.eval_dict)
+                 # dump last chromosome to sam
+                self.dump_dict_to_sam(
+                    eval_dict=self.eval_dict
+                )
                 break
             if line[0] == '@': # store header lines
                 self.write_to_retain(
                     line=line
                 )
                 # self.write_to_discard(line)
+                self.header_length += 1 
                 continue
             self.total_reads += 1 # made it through all evalutation steps
 
@@ -297,14 +351,30 @@ class Dedupe():
             read.generate_postrand()
 
             # reset dictionary if we've reached a new chromosome
-            if int(read.rname) != int(self.current_chr):
-                self.current_chr = int(read.rname)
+            if read.rname != self.current_chr:
+                self.summary_dict[self.current_chr] = len(self.eval_dict)
+                self.current_chr = read.rname
                 self.dump_dict_to_sam(
                     eval_dict=self.eval_dict
                 )
+                self.num_reads_retained += len(self.eval_dict)
                 self.reset_eval_dict(
                     eval_dict=self.eval_dict
                 )
+
+            # check if pair has already been found
+            # TODO: i'm thinking it would be best if a pair has already been found, to make a change to the first and second reads eval_dict value
+            # TODO: this is great to perform some kind of operation here and then pass that info into evaluate_existence
+            if self.paired_end:
+                if read.rname in self.paired_end_dict:
+                    print(True)
+                    # add postrand to mate's eval dict (this way if it's going to be replaced, you can also reference the mate by it's postrand)
+                    # TODO: need to add another piece to the postrand to designate if this is the first read found at this position (in the case that you have multiple reads map to the same location BUT they are not PCR duplicates)
+                    # TODO: default will be (self.correct_pos, self.strand, self.umi, 1) - if a read happens to match pos, strand, and umi, but has potential to NOT be PCR duplicate, then can add 1 for each time this happens - edge case, may not need to address right at beginning
+                    # write the new mate to the eval_dict
+                    # add new mate to paired_end_dict
+                    # may need to not think about qscore while we get this going at first
+                    # TODO: this may need to be moved to evaluate_existence
 
             # if erroneous umi, write to discard 
             # TODO: challenge is to make correction 
@@ -320,11 +390,23 @@ class Dedupe():
         self.open_input_sam.close()
         self.open_retain_sam.close()
         # self.open_discard_sam.close()
+        
+        # finish up summary dict 
+        # TODO: turn this into a function
+        self.summary_dict['header_length'] = self.header_length
+        self.summary_dict['total_reads'] = self.total_reads
+        self.summary_dict['incorrect_umi'] = self.incorrect_umi
+        self.summary_dict['reads_retained'] = self.num_reads_retained
+        print(self.summary_dict)
 
         self.deduped = True
 
+    # TODO: write this function
     def evaluate_qscore(
         self):
+        """
+        Evaluates if qscore is higher than current placeholder and performs actions accordingly.
+        """
         return None
 
     def reset_eval_dict(
@@ -367,6 +449,15 @@ class Dedupe():
         self.eval_dict = {}
         return self.eval_dict
 
+    # TODO: write this function
+    def write_out_summary_dict(
+        self):
+        """
+        Finishes writing to and prints out the summary dict.
+        """
+        # TODO: this needs to include header length, incorrect umis, reads per chromosome, reads discarded, total reads 
+        return None
+
 class SamRead:
     def __init__(
         self,
@@ -382,6 +473,7 @@ class SamRead:
         self.corrected_pos = None
         self.cigar = None
         self.qscore = None
+        self.read_num = None
         
         # unitest fuctionality
         if raw_line is not None:
@@ -460,7 +552,7 @@ class SamRead:
             'I': -1,
             'M': +1,
             'S': +1,
-            'N': +1,
+            'N': +1, # TODO: check to make sure this is right
         }
 
         # amake position correction based on cigar string
@@ -579,4 +671,30 @@ class SamRead:
         cigar_letters.remove("")
         return cigar_nums, cigar_letters
 
+    def determine_read_num(
+        self,
+        flag:int=None):
+        """
+        Determines if first or second read in paired-end sam file. Bit 64 is R1 and bit 128 is R2.
 
+        Parameters:
+        -----------
+
+        flag : int
+            Bitwise flag.
+
+        Returns:
+        --------
+
+        read_num : str
+            'R1' or 'R2' depending on if it's the first or second read in the sequence.
+
+        """
+        # unittest functionality
+        if flag is not None:
+            self.flag = flag
+        if ((self.flag & 64) == 64):
+            self.read_num = 'R1'
+        elif ((self.flag & 128) == 128):
+            self.read_num = 'R2'
+        return self.read_num

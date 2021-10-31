@@ -82,6 +82,15 @@ assert test_samfile_class.umi_filename == umi_filename, "Issue with test_samfile
 
 test_samread_class = SamRead()
 
+def test_determine_read_num():
+    assert test_samread_class.determine_read_num(64) == 'R1', "SamRead method determine_read_num making error in bit 64 of bitwise flag."
+    assert test_samread_class.determine_read_num(128) == 'R2', "SamRead method determine_read_num making error in bit 128 of bitwise flag."
+test_determine_read_num()
+
+def test_parse_cigar_string():
+    assert test_samread_class.parse_cigar_string(cigar='2S') == ([2],['S']), "Parse cigar string function not separating ints and strings correctly."
+test_parse_cigar_string()
+
 def test_read_umis():
     umis = [
         'AACGCCAT',
@@ -121,7 +130,9 @@ test_parse_columns()
 def test_correct_start_position():
     assert test_samread_class.correct_start_position(10,"2S","+") == 8, "SamRead correct_start_position method making error on forward strand."
     assert test_samread_class.correct_start_position(10,"2M","+") == 10, "SamRead correct_start_position method incorrectly adjusting start position."
-    assert test_samread_class.correct_start_position(10,"2S","-") == 12, "SamRead correct_start_position method making error on reverse strand."
+    assert test_samread_class.correct_start_position(10,"2S","-") == 10, "SamRead correct_start_position method making error on reverse strand."
+    assert test_samread_class.correct_start_position(10,"2S2M2D2M2S","-") == 18, "SamRead correct_start_position method making error on the reverse strand correction."
+    assert test_samread_class.correct_start_position(10,"10M","-") == 20, "SamRead correct_start-position method making error on the reverse strand correction."
 test_correct_start_position()
 
 def test_generate_postrand():
@@ -211,10 +222,14 @@ def test_evaluate_existence():
     )
 
     assert existence == True, "Error in Dedupe method evaluate_existence. Incorporating quality check when it should not be."
-
-
 test_evaluate_existence()
-    
+
+def test_determine_if_mapped():
+    assert test_samread_class.determine_if_mapped(4) == False, "SamRead method determine_if_mapped incorrectly assigning bool."
+test_determine_if_mapped()
+
+
+
 print("All tests passed!")
 
 

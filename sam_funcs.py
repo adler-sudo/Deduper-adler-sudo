@@ -65,7 +65,10 @@ class Dedupe():
 
     def write_to_paired_end_dict(
         self,
-        paired_end_dict:dict=None):
+        paired_end_dict:dict=None,
+        rnext:dict=None,
+        key:tuple=None,
+        partner_key:tuple=None):
         """
         Write to the paired end dictionary.
 
@@ -80,16 +83,35 @@ class Dedupe():
 
             {
                 rnext: {
-                    'read_num': 'R1' or 'R2',
-                    'partner_key': eval_dict key belonging to mate (self.correct_pos, self.strand, self.umi)
+                    'key': eval_dict key (self.correct_pos, self.strand, self.umi, instance),
+                    'partner_key': eval_dict key belonging to mate (self.correct_pos, self.strand, self.umi, instance)
                 }
+
+        rnext : str
+            The name of the mate read.
+
+        key : tuple
+            The key of the first encountered read.
+
+        partner_key : tuple
+            The key belonging to the second encountered read.
 
         Returns:
         --------
 
-        paired-end dictionary.
+        paired_end_dict : dict
+            The paired-end dictionary. See structure above.
 
         """
+        # unittest functionality
+        if paired_end_dict is not None:
+            self.paired_end_dict = paired_end_dict
+        # write to paired end
+        paired_end_dict[rnext] = {
+            'key': key,
+            'partner_key': partner_key
+        }
+        return self.paired_end_dict
 
     def read_umis(
         self,
@@ -145,10 +167,73 @@ class Dedupe():
 
     # TODO: write this function
     def evaluate_pair_existence(
-        self):
+        self,
+        paired_end_dict:dict=None,
+        qname:str=None,
+        rname:str=None,
+        postrand:str=None,
+        qscore:float=None,
+        raw_line:str=None,
+        eval_dict:dict=None):
         """
         Evaluates if pair has already been found. Performs proper steps in reading and writing to the paired_end_dict.
+        
+        Parameters:
+        -----------
+
+        paired_end_dict : dict
+            The paired-end dictionary that holds the connection between the two pairs
+
+            Structure:
+            ----------
+
+            See 'write_to_paired_end_dict' for structure.
+
+        qname : str
+            The qname of the current read being evaluated, which will be the KEY in the paired-end dict because the rname of the pair was used to generate the key.
+
+        rname : str
+            The qname of the PAIR.
+
+        postrand : tuple
+            The postrand of the current read.
+
+        qscore : float
+            The qscore of the current read.
+
+        raw_line : str
+            The raw_line of the current read.
+
+        eval_dict : dict
+            The evaluation dictionary. NOTE: may not need this, as the eval_dict functions will be carried out in the 'evaluate_existence' function.
+
+        Returns:
+        --------
+
+        None
+
         """
+        # unittest functionality
+        if paired_end_dict is not None:
+            self.paired_end_dict = paired_end_dict
+        if eval_dict is not None:
+            self.eval_dict = eval_dict
+        # run evaluation
+        if qname in self.paired_end_dict: # if qname in dict, pair has already been found
+            # add second encountered read key to instance of first read
+            self.paired_end_dict[qname]['partner_key'] = postrand
+            # grab partner key
+            partner_key = self.paired_end_dict[rname]['key']
+        else:
+            partner_key = ''
+
+        write_to_paired_end_dict(
+            paired_end_dict=self.paired_end_dict,
+            rnext=rname,
+            key=postrand,
+            partner_key=partner_key
+        )
+
         return None
 
     def evaluate_existence(
@@ -157,6 +242,8 @@ class Dedupe():
         umi:str=None,
         qscore:float=None,
         raw_line:str=None,
+        qname:str=None,
+        rname:str=None,
         eval_dict:dict=None,
         randomer_umi:bool=None,
         keep_highest_qscore:bool=None):
@@ -172,7 +259,7 @@ class Dedupe():
             Example:
             --------
 
-            (100, "+", "ATGCATGC")
+            (100, "+", "ATGCATGC", 1)
 
         umi : str
             Contains the UMI sequence for the current read.
@@ -188,9 +275,11 @@ class Dedupe():
 
             The structure of the dictionary is:
                 {
-                    (self.correct_pos, self.strand, self.umi): {
-                        'qscore': float
-                        'line': raw_line
+                    (self.correct_pos, self.strand, self.umi, instance): {
+                        'qscore': float,
+                        'line': raw_line,
+                        'qname': qname,
+                        'rname': rname
 
                     }
                 }
@@ -294,7 +383,7 @@ class Dedupe():
 
             The structure of the dictionary is:
                 {
-                    (self.correct_pos, self.strand, self.umi): {
+                    (self.correct_pos, self.strand, self.umi, instance): {
                         'qscore': float
                         'line': raw_line
                     }
@@ -366,15 +455,7 @@ class Dedupe():
             # TODO: i'm thinking it would be best if a pair has already been found, to make a change to the first and second reads eval_dict value
             # TODO: this is great to perform some kind of operation here and then pass that info into evaluate_existence
             if self.paired_end:
-                if read.rname in self.paired_end_dict:
-                    print(True)
-                    # add postrand to mate's eval dict (this way if it's going to be replaced, you can also reference the mate by it's postrand)
-                    # TODO: need to add another piece to the postrand to designate if this is the first read found at this position (in the case that you have multiple reads map to the same location BUT they are not PCR duplicates)
-                    # TODO: default will be (self.correct_pos, self.strand, self.umi, 1) - if a read happens to match pos, strand, and umi, but has potential to NOT be PCR duplicate, then can add 1 for each time this happens - edge case, may not need to address right at beginning
-                    # write the new mate to the eval_dict
-                    # add new mate to paired_end_dict
-                    # may need to not think about qscore while we get this going at first
-                    # TODO: this may need to be moved to evaluate_existence
+                print('paired-end')
 
             # if erroneous umi, write to discard 
             # TODO: challenge is to make correction 
@@ -397,7 +478,8 @@ class Dedupe():
         self.summary_dict['total_reads'] = self.total_reads
         self.summary_dict['incorrect_umi'] = self.incorrect_umi
         self.summary_dict['reads_retained'] = self.num_reads_retained
-        print(self.summary_dict)
+        for entry in self.summary_dict:
+            print(entry,self.summary_dict[entry],sep=": ")
 
         self.deduped = True
 
@@ -575,9 +657,10 @@ class SamRead:
 
     def generate_postrand(
         self,
-        corrected_pos=None,
-        strand=None,
-        umi=None):
+        corrected_pos:int=None,
+        strand:str=None,
+        umi:str=None,
+        instance:int=None):
         """
         generates position, read combo for current read. To be used
         in evaluating whether duplicate or not.
@@ -591,7 +674,7 @@ class SamRead:
         if umi is not None:
             self.umi = umi
 
-        self.postrand = (self.corrected_pos, self.strand, self.umi)
+        self.postrand = (self.corrected_pos, self.strand, self.umi, 1)
         return self.postrand
 
     def determine_strandedness(

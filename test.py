@@ -82,6 +82,43 @@ assert test_samfile_class.umi_filename == umi_filename, "Issue with test_samfile
 
 test_samread_class = SamRead()
 
+def test_evaluate_pair_existence():
+    paired_end_dict = {
+        'samplernext':{
+            'key': (10, '+', 'sampleumi', 1),
+            'partner_key': (20, '-', 'sampleumi', 1)
+        }
+    }
+    eval_dict = {
+        (10,'+','sampleumi',1):{
+            'qscore':39,
+            'line': 'sampleline\tsampleline'
+        }
+    }
+    assert test_samfile_class.evaluate_pair_existence(
+        qname='samplernext',
+        rname='samplercurrent',
+        paired_end_dict=paired_end_dict,
+        eval_dict=eval_dict
+    ) == None, "Error in evaluating pair existence."
+test_evaluate_pair_existence()
+
+def test_write_to_paired_end_dict():
+    paired_end_dict = {}
+    paired_end_dict_check = {
+        'samplernext':{
+            'key': (10, '+', 'sampleumi', 1),
+            'partner_key': (20, '-', 'sampleumi', 1)
+        }
+    }
+    assert test_samfile_class.write_to_paired_end_dict(
+        paired_end_dict=paired_end_dict,
+        rnext='samplernext',
+        key=(10,'+','sampleumi',1),
+        partner_key=(20,'-','sampleumi',1)
+    ) == paired_end_dict_check, "Paired end dict not being written correctly."
+test_write_to_paired_end_dict()
+
 def test_determine_read_num():
     assert test_samread_class.determine_read_num(64) == 'R1', "SamRead method determine_read_num making error in bit 64 of bitwise flag."
     assert test_samread_class.determine_read_num(128) == 'R2', "SamRead method determine_read_num making error in bit 128 of bitwise flag."
@@ -136,7 +173,7 @@ def test_correct_start_position():
 test_correct_start_position()
 
 def test_generate_postrand():
-    assert test_samread_class.generate_postrand(10,"+","ATAT") == (10,"+","ATAT"), "SamRead generate_postrand method generating tuple incorrectly."
+    assert test_samread_class.generate_postrand(10,"+","ATAT",1) == (10,"+","ATAT",1), "SamRead generate_postrand method generating tuple incorrectly."
 test_generate_postrand()
 
 def test_determine_strandedness():

@@ -13,7 +13,6 @@ umi_file="STL96.txt"
 output_retain_file="C1_SE_uniqAlign.retain.sam"
 
 # run deduper script
-echo hello
-./adler_deduper.py -f $input_file \
+/usr/bin/time -v ./adler_deduper.py -f $input_file \
     -u $umi_file \
     -o $output_retain_file

@@ -63,6 +63,32 @@ class Dedupe():
                 umi_filename=self.umi_filename
             )
 
+    def read_umis(
+        self,
+        umi_filename:str=None):
+        """
+        Reads UMI file and stores in umis instance attribute.
+
+        Parameters:
+        -----------
+
+        umi_filename : str
+            Filename of UMI. Should exist as .txt file with each UMI on newline.
+
+        Returns:
+        --------
+
+        self.randomer_umi : bool
+            Returns True when UMI file is NOT defined, and therefore UMIs will be treated as randomers.
+            Returns False when UMI file IS defined.
+
+        """
+        if self.umi_filename is not None:
+            open_umis = open(self.umi_filename,'r')
+            self.umis = open_umis.read().split('\n')
+            open_umis.close()
+        return self.randomer_umi
+
     def write_to_paired_end_dict(
         self,
         paired_end_dict:dict=None,
@@ -112,64 +138,155 @@ class Dedupe():
         # write to paired end
         paired_end_dict[qname] = {
             'postrand':postrand,
-            'qscore':qscore,
-            'raw_line':raw_line
+            'qscore1':qscore,
+            'raw_line1':raw_line
         }
         return self.paired_end_dict
 
-    def read_umis(
+    def reset_paired_end_dict(
         self,
-        umi_filename:str=None):
+        paired_end_dict:dict=None):
         """
-        Reads UMI file and stores in umis instance attribute.
+        Empties the dictionary.
 
         Parameters:
         -----------
 
-        umi_filename : str
-            Filename of UMI. Should exist as .txt file with each UMI on newline.
+        paired_end_dict : dict
+            The dict to be emptied.
 
         Returns:
         --------
 
-        self.randomer_umi : bool
-            Returns True when UMI file is NOT defined, and therefore UMIs will be treated as randomers.
-            Returns False when UMI file IS defined.
+        self.paired_end_dict : dict
+            The empty dictionary.
+
+            The structure of the dictionary is:
+            {}
+
 
         """
-        if self.umi_filename is not None:
-            open_umis = open(self.umi_filename,'r')
-            self.umis = open_umis.read().split('\n')
-            open_umis.close()
-        return self.randomer_umi
+        # unittest functionality
+        if paired_end_dict is not None:
+            self.paired_end_dict = paired_end_dict
 
-    def write_to_retain(
+        # self.eval_dict = {k:[] for k in self.eval_dict}
+        # return self.eval_dict
+        self.paired_end_dict = {}
+        return self.paired_end_dict
+
+    def write_to_eval_dict(
         self,
-        line:str=None):
+        postrand:tuple=None,
+        qscore1:float=None,
+        qscore2:float=None,
+        raw_line1:str=None,
+        raw_line2:str=None,
+        eval_dict:dict=None):
+
         """
-        Writes a line to the retain file.
+        Writes the current read to the eval_dict. Could be making a new entry or overwriting an existing entry.
 
         Parameters:
         -----------
-        
-        retain_filename : str
-            Defines the path to the deduped SAM file.
 
-        line : str
-            The raw line to be written.
+        postrand : tuple
+            A tuple containing cigar-corrected-position, stand, and umi.
+
+        qscore : float
+            The quality score of the current read.
+
+        raw_line : str
+            The raw, tab-delimited line.
+
+        eval_dict : dict
+            Evaluation dict containing record of reads that have been written to the retention file.
+
+            The structure of the dictionary depends on whether the reads were produced from paired or single end sequencing:
+                
+                SINGLE-END:
+                {
+                    (self.correct_pos, self.strand, self.umi): {
+                        'qscore1': float
+                        'raw_line1': raw_line
+                    }
+                }
+
+                PAIRED-END
+                {
+                    (+ strand position, +, + strand umi, - strand position, -, - strand umi):{
+                        'qscore1': qscore + strand
+                        'qscore2': qscore - strand
+                        'raw_line1': raw_line + strand
+                        'raw_line2': raw_line - strand
+                    }
+                }
 
         Returns:
         --------
 
-        None
+        self.eval_dict : dict
+            Returns the eval_dict. Really only for the purpose of unittesting.S
+
 
         """
+        # unittest functionality
+        if eval_dict is not None:
+            self.eval_dict = eval_dict
+
+        # determine actions based on single or paired end
+        if self.paired_end:
+            self.eval_dict[postrand] = {
+                'qscore1':qscore1,
+                'qscore2':qscore2,
+                'raw_line1':raw_line1,
+                'raw_line2':raw_line2
+            }
+        elif not self.paired_end:
+            # make eval_dict addition
+            self.eval_dict[postrand] = {'qscore1':qscore1,'raw_line1':raw_line1}
+        return self.eval_dict
+
+    def reset_eval_dict(
+        self,
+        eval_dict:dict=None):
+        """
+        Empties the dictionary.
+
+        Parameters:
+        -----------
+
+        eval_dict : dict
+            The dict to be emptied.
+
+            The structure of the dictionary is:
+                {
+                    (self.correct_pos, self.strand, self.umi): {
+                        'qscore1': float
+                        'raw_line1': raw_line
+                    }
+                }
+
+        Returns:
+        --------
+
+        self.eval_dict : dict
+            The empty dictionary.
+
+            The structure of the dictionary is:
+            {}
 
 
-        self.open_retain_sam.write(line)
-        return None
+        """
+        # unittest functionality
+        if eval_dict is not None:
+            self.eval_dict = eval_dict
 
-    # TODO: write this function
+        # self.eval_dict = {k:[] for k in self.eval_dict}
+        # return self.eval_dict
+        self.eval_dict = {}
+        return self.eval_dict
+
     def evaluate_pair_existence(
         self,
         paired_end_dict:dict=None,
@@ -243,8 +360,9 @@ class Dedupe():
                     raw_line2=self.paired_end_dict[rnext]['raw_line'],
                     eval_dict=self.eval_dict
                 )
-            elif combo_postrand in eval_dict:
-                pass
+            # remove pair from paired end dict now that it has been transferred to eval_dict
+            paired_end_dict.pop(qname,None)
+            paired_end_dict.pop(rnext,None)
         # write instance to the paired_end_dict if its partner doesn't exist
         elif rnext not in self.paired_end_dict:
             self.write_to_paired_end_dict(
@@ -360,102 +478,6 @@ class Dedupe():
                 return True
         return False
 
-    def dump_dict_to_sam(
-        self,
-        paired_end:bool=None,
-        eval_dict:dict=None):
-        """
-        write the eval_dict to the retain sam file
-        """
-
-        if paired_end is not None:
-            self.paired_end = paired_end
-        if eval_dict is not None:
-            self.eval_dict = eval_dict
-        # determine action based on single or paired end
-        if self.paired_end:
-            for record in self.eval_dict:
-                raw_line1 = self.eval_dict[record]['raw_line1']
-                raw_line2 = self.eval_dict[record]['raw_line2']
-                self.write_to_retain(raw_line1)
-                self.write_to_retain(raw_line2)
-        elif not self.paired_end:
-            for record in self.eval_dict:
-                line = self.eval_dict[record]['raw_line1']
-                self.write_to_retain(line)
-
-    def write_to_eval_dict(
-        self,
-        postrand:tuple=None,
-        qscore1:float=None,
-        qscore2:float=None,
-        raw_line1:str=None,
-        raw_line2:str=None,
-        eval_dict:dict=None):
-
-        """
-        Writes the current read to the eval_dict. Could be making a new entry or overwriting an existing entry.
-
-        Parameters:
-        -----------
-
-        postrand : tuple
-            A tuple containing cigar-corrected-position, stand, and umi.
-
-        qscore : float
-            The quality score of the current read.
-
-        raw_line : str
-            The raw, tab-delimited line.
-
-        eval_dict : dict
-            Evaluation dict containing record of reads that have been written to the retention file.
-
-            The structure of the dictionary depends on whether the reads were produced from paired or single end sequencing:
-                
-                SINGLE-END:
-                {
-                    (self.correct_pos, self.strand, self.umi): {
-                        'qscore1': float
-                        'raw_line1': raw_line
-                    }
-                }
-
-                PAIRED-END
-                {
-                    (+ strand position, +, + strand umi, - strand position, -, - strand umi):{
-                        'qscore1': qscore + strand
-                        'qscore2': qscore - strand
-                        'raw_line1': raw_line + strand
-                        'raw_line2': raw_line - strand
-                    }
-                }
-
-        Returns:
-        --------
-
-        self.eval_dict : dict
-            Returns the eval_dict. Really only for the purpose of unittesting.S
-
-
-        """
-        # unittest functionality
-        if eval_dict is not None:
-            self.eval_dict = eval_dict
-
-        # determine actions based on single or paired end
-        if self.paired_end:
-            self.eval_dict[postrand] = {
-                'qscore1':qscore1,
-                'qscore2':qscore2,
-                'raw_line1':raw_line1,
-                'raw_line2':raw_line2
-            }
-        elif not self.paired_end:
-            # make eval_dict addition
-            self.eval_dict[postrand] = {'qscore1':qscore1,'raw_line1':raw_line1}
-        return self.eval_dict
-
     def dedupe(self):
         """
         Deduplicates the input SAM file.
@@ -495,13 +517,25 @@ class Dedupe():
             if read.rname != self.current_chr:
                 self.summary_dict[self.current_chr] = len(self.eval_dict)
                 self.current_chr = read.rname
+                # write unpaired reads to eval dict
+                if self.paired_end:
+                    print(len(self.paired_end_dict))
+                    for unpaired_read in self.paired_end_dict:
+                        self.write_to_eval_dict(
+                            postrand=self.paired_end_dict[unpaired_read]['postrand'],
+                            raw_line1=self.paired_end_dict[unpaired_read]['raw_line1']
+                        )
                 self.dump_dict_to_sam(
                     paired_end=self.paired_end,
                     eval_dict=self.eval_dict
                 )
+                # TODO: need to fix how this counts for paired end
                 self.num_reads_retained += len(self.eval_dict)
                 self.reset_eval_dict(
                     eval_dict=self.eval_dict
+                )
+                self.reset_paired_end_dict(
+                    paired_end_dict=self.paired_end_dict
                 )
 
             # if paired-end follow paired-end existence
@@ -542,6 +576,57 @@ class Dedupe():
 
         self.deduped = True
 
+    def dump_dict_to_sam(
+        self,
+        paired_end:bool=None,
+        eval_dict:dict=None):
+        """
+        write the eval_dict to the retain sam file
+        """
+
+        if paired_end is not None:
+            self.paired_end = paired_end
+        if eval_dict is not None:
+            self.eval_dict = eval_dict
+        # determine action based on single or paired end
+        if self.paired_end:
+            for record in self.eval_dict:
+                raw_line1 = self.eval_dict[record]['raw_line1']
+                raw_line2 = self.eval_dict[record]['raw_line2']
+                self.write_to_retain(raw_line1)
+                if raw_line2 is not None:
+                    self.write_to_retain(raw_line2)
+        elif not self.paired_end:
+            for record in self.eval_dict:
+                line = self.eval_dict[record]['raw_line1']
+                self.write_to_retain(line)
+
+    def write_to_retain(
+        self,
+        line:str=None):
+        """
+        Writes a line to the retain file.
+
+        Parameters:
+        -----------
+        
+        retain_filename : str
+            Defines the path to the deduped SAM file.
+
+        line : str
+            The raw line to be written.
+
+        Returns:
+        --------
+
+        None
+
+        """
+
+
+        self.open_retain_sam.write(line)
+        return None
+
     # TODO: write this function
     def evaluate_qscore(
         self):
@@ -549,46 +634,6 @@ class Dedupe():
         Evaluates if qscore is higher than current placeholder and performs actions accordingly.
         """
         return None
-
-    def reset_eval_dict(
-        self,
-        eval_dict:dict=None):
-        """
-        Empties the dictionary.
-
-        Parameters:
-        -----------
-
-        eval_dict : dict
-            The dict to be emptied.
-
-            The structure of the dictionary is:
-                {
-                    (self.correct_pos, self.strand, self.umi): {
-                        'qscore1': float
-                        'raw_line1': raw_line
-                    }
-                }
-
-        Returns:
-        --------
-
-        self.eval_dict : dict
-            The empty dictionary.
-
-            The structure of the dictionary is:
-            {}
-
-
-        """
-        # unittest functionality
-        if eval_dict is not None:
-            self.eval_dict = eval_dict
-
-        # self.eval_dict = {k:[] for k in self.eval_dict}
-        # return self.eval_dict
-        self.eval_dict = {}
-        return self.eval_dict
 
     # TODO: write this function
     def write_out_summary_dict(
@@ -690,7 +735,7 @@ class SamRead:
         )
         minus_strand_map = {
             'D': +1,
-            'I': -1,
+            'I': 0,
             'M': +1,
             'S': +1,
             'N': +1, # TODO: check to make sure this is right

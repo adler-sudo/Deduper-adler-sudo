@@ -14,6 +14,11 @@ def parse_args(args):
         "--input_file", 
         help="Input SAM file - sorted, mapped reads")
     parser.add_argument(
+        "-o",
+        "--output_retain_file",
+        help="Output retain SAM file containing uniquely mapped reads."
+    )
+    parser.add_argument(
         "-p", 
         "--paired-end", 
         action="store_true", 
@@ -36,13 +41,16 @@ args = parse_args(sys.argv[1:])
 paired_end = False
 input_filename = args.input_file
 umi_filename = args.umi
+retain_filename = args.output_retain_file
 
 # argparser
 if args.input_file is None:
-    exit("ATTENTION: Exiting script!\nPlease specify a sorted SAM file utilizing the input_file flag (-f, --input_file).\n")
+    exit("ATTENTION: Exiting script!\nPlease specify a sorted SAM file utilizing the input_file flag (-f, --input_file).")
+if args.output_retain_file is None:
+    exit("ATTENTION: Exiting script!\nPlease specify a filename to which the uniquely mapped reads will be written.")
 if args.paired_end:
     paired_end = True
-    exit("ATTENTION: Exiting script!\nApologies! Paired-end functionality not yet included. Please remove paired_end flag (-p, --paired_end).\n")
+    print('Paired end SAM file indicated.')
 
 # keep highest qscore
 if args.keep_highest_qscore:
@@ -50,12 +58,14 @@ if args.keep_highest_qscore:
 else:
     keep_highest_qscore=False
 
+print("Entering dedupe function.")
+
 # instantiate Dedupe class
 dedupe_me = Dedupe(
     input_filename=input_filename,
     umi_filename=umi_filename,
-    retention_filename="C1_SE_uniqAlign.retain.sam", # TODO: remove declaration here - shift to argparse
-    # duplicate_filename="C1_SE_uniqAlign.retain.sam",
-    keep_highest_qscore=keep_highest_qscore
+    retention_filename=retain_filename,
+    keep_highest_qscore=keep_highest_qscore,
+    paired_end=paired_end
 )
 dedupe_me.dedupe()

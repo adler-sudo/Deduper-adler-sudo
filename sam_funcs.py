@@ -31,7 +31,7 @@ class Dedupe():
         retention_filename:str=None,
         read_length:int=150,
         keep_highest_qscore:bool=False,
-        paired_end:bool=None):
+        paired_end:bool=False):
 
         self.input_filename = input_filename
         self.umi_filename = umi_filename
@@ -53,7 +53,7 @@ class Dedupe():
 
         self.deduped = False
 
-        self.paired_end = False
+        self.paired_end = paired_end
         self.paired_end_dict = {}
 
         self.summary_dict = {}
@@ -66,9 +66,11 @@ class Dedupe():
     def write_to_paired_end_dict(
         self,
         paired_end_dict:dict=None,
-        rnext:dict=None,
-        key:tuple=None,
-        partner_key:tuple=None):
+        qname:str=None,
+        postrand:tuple=None,
+        qscore:float=None,
+        raw_line:str=None):
+               
         """
         Write to the paired end dictionary.
 
@@ -82,19 +84,20 @@ class Dedupe():
             ----------
 
             {
-                rnext: {
-                    'key': eval_dict key (self.correct_pos, self.strand, self.umi, instance),
-                    'partner_key': eval_dict key belonging to mate (self.correct_pos, self.strand, self.umi, instance)
+                qname: {
+                    'postrand':postrand,
+                    'qscore1':qscore,
+                    'raw_line1':raw_line 
                 }
 
-        rnext : str
-            The name of the mate read.
+        qname : str
+            The name of the current read.
 
-        key : tuple
-            The key of the first encountered read.
+        qscore : float
+            The quality score of the current read.
 
-        partner_key : tuple
-            The key belonging to the second encountered read.
+        raw_line : str
+            The raw sam file line of the current read.
 
         Returns:
         --------
@@ -107,9 +110,10 @@ class Dedupe():
         if paired_end_dict is not None:
             self.paired_end_dict = paired_end_dict
         # write to paired end
-        paired_end_dict[rnext] = {
-            'key': key,
-            'partner_key': partner_key
+        paired_end_dict[qname] = {
+            'postrand':postrand,
+            'qscore':qscore,
+            'raw_line':raw_line
         }
         return self.paired_end_dict
 
@@ -169,12 +173,14 @@ class Dedupe():
     def evaluate_pair_existence(
         self,
         paired_end_dict:dict=None,
+        umi:str=None,
         qname:str=None,
-        rname:str=None,
+        rnext:str=None,
         postrand:str=None,
         qscore:float=None,
         raw_line:str=None,
-        eval_dict:dict=None):
+        eval_dict:dict=None,
+        randomer_umi:str=None):
         """
         Evaluates if pair has already been found. Performs proper steps in reading and writing to the paired_end_dict.
         
@@ -192,7 +198,7 @@ class Dedupe():
         qname : str
             The qname of the current read being evaluated, which will be the KEY in the paired-end dict because the rname of the pair was used to generate the key.
 
-        rname : str
+        rnext : str
             The qname of the PAIR.
 
         postrand : tuple
@@ -218,21 +224,36 @@ class Dedupe():
             self.paired_end_dict = paired_end_dict
         if eval_dict is not None:
             self.eval_dict = eval_dict
-        # run evaluation
-        if qname in self.paired_end_dict: # if qname in dict, pair has already been found
-            # add second encountered read key to instance of first read
-            self.paired_end_dict[qname]['partner_key'] = postrand
-            # grab partner key
-            partner_key = self.paired_end_dict[rname]['key']
-        else:
-            partner_key = ''
-
-        write_to_paired_end_dict(
-            paired_end_dict=self.paired_end_dict,
-            rnext=rname,
-            key=postrand,
-            partner_key=partner_key
-        )
+        # combine current read with partner if they match
+        if rnext in self.paired_end_dict:
+            # then combine and write to eval_dict
+            pair_postrand = self.paired_end_dict[rnext]['postrand']
+            # place positive read first in combo
+            if postrand[1] == '+':
+                combo_postrand = postrand + pair_postrand
+            elif pair_postrand[1] == '+':
+                combo_postrand = pair_postrand + postrand
+            # combine and write to eval_dict if doesn't already exist
+            if combo_postrand not in eval_dict:
+                self.write_to_eval_dict(
+                    postrand=combo_postrand,
+                    qscore1=qscore,
+                    qscore2=self.paired_end_dict[rnext]['qscore'],
+                    raw_line1=raw_line,
+                    raw_line2=self.paired_end_dict[rnext]['raw_line'],
+                    eval_dict=self.eval_dict
+                )
+            elif combo_postrand in eval_dict:
+                pass
+        # write instance to the paired_end_dict if its partner doesn't exist
+        elif rnext not in self.paired_end_dict:
+            self.write_to_paired_end_dict(
+                paired_end_dict=self.paired_end_dict,
+                qname=qname,
+                postrand=postrand,
+                qscore=qscore,
+                raw_line=raw_line
+            )
 
         return None
 
@@ -275,12 +296,9 @@ class Dedupe():
 
             The structure of the dictionary is:
                 {
-                    (self.correct_pos, self.strand, self.umi, instance): {
-                        'qscore': float,
-                        'line': raw_line,
-                        'qname': qname,
-                        'rname': rname
-
+                    (self.correct_pos, self.strand, self.umi): {
+                        'qscore1': float,
+                        'raw_line1': raw_line
                     }
                 }
 
@@ -312,55 +330,67 @@ class Dedupe():
                 # TODO: this should really be its own function
                 self.write_to_eval_dict(
                         postrand=postrand,
-                        qscore=qscore,
-                        raw_line=raw_line)
-            elif self.keep_highest_qscore and self.eval_dict[postrand]['qscore'] < qscore:
+                        qscore1=qscore,
+                        raw_line1=raw_line)
+            elif self.keep_highest_qscore and self.eval_dict[postrand]['qscore1'] < qscore:
                 self.write_to_eval_dict(
                         postrand=postrand,
-                        qscore=qscore,
-                        raw_line=raw_line)
+                        qscore1=qscore,
+                        raw_line1=raw_line)
             else:
                 return True
-        else:
+        elif not self.randomer_umi:
             if umi in self.umis:
                 if postrand not in self.eval_dict:
                     # TODO: this should really be its own function
                     self.write_to_eval_dict(
                         postrand=postrand,
-                        qscore=qscore,
-                        raw_line=raw_line)
-                elif self.keep_highest_qscore and eval_dict[postrand]['qscore'] < qscore:
+                        qscore1=qscore,
+                        raw_line1=raw_line)
+                elif self.keep_highest_qscore and self.eval_dict[postrand]['qscore1'] < qscore:
                     self.write_to_eval_dict(
                         postrand=postrand,
-                        qscore=qscore,
-                        raw_line=raw_line)
+                        qscore1=qscore,
+                        raw_line1=raw_line)
                     print("higher quality read encountered")
                 else:
                     return True
-            else:
+            elif umi not in self.umis:
                 self.incorrect_umi += 1 # TODO: add unittest for this
                 return True
         return False
 
     def dump_dict_to_sam(
         self,
-        eval_dict=None):
+        paired_end:bool=None,
+        eval_dict:dict=None):
         """
         write the eval_dict to the retain sam file
         """
 
+        if paired_end is not None:
+            self.paired_end = paired_end
         if eval_dict is not None:
             self.eval_dict = eval_dict
-
-        for record in self.eval_dict:
-            line = self.eval_dict[record]['line']
-            self.write_to_retain(line)
+        # determine action based on single or paired end
+        if self.paired_end:
+            for record in self.eval_dict:
+                raw_line1 = self.eval_dict[record]['raw_line1']
+                raw_line2 = self.eval_dict[record]['raw_line2']
+                self.write_to_retain(raw_line1)
+                self.write_to_retain(raw_line2)
+        elif not self.paired_end:
+            for record in self.eval_dict:
+                line = self.eval_dict[record]['raw_line1']
+                self.write_to_retain(line)
 
     def write_to_eval_dict(
         self,
         postrand:tuple=None,
-        qscore:float=None,
-        raw_line:str=None,
+        qscore1:float=None,
+        qscore2:float=None,
+        raw_line1:str=None,
+        raw_line2:str=None,
         eval_dict:dict=None):
 
         """
@@ -381,11 +411,23 @@ class Dedupe():
         eval_dict : dict
             Evaluation dict containing record of reads that have been written to the retention file.
 
-            The structure of the dictionary is:
+            The structure of the dictionary depends on whether the reads were produced from paired or single end sequencing:
+                
+                SINGLE-END:
                 {
-                    (self.correct_pos, self.strand, self.umi, instance): {
-                        'qscore': float
-                        'line': raw_line
+                    (self.correct_pos, self.strand, self.umi): {
+                        'qscore1': float
+                        'raw_line1': raw_line
+                    }
+                }
+
+                PAIRED-END
+                {
+                    (+ strand position, +, + strand umi, - strand position, -, - strand umi):{
+                        'qscore1': qscore + strand
+                        'qscore2': qscore - strand
+                        'raw_line1': raw_line + strand
+                        'raw_line2': raw_line - strand
                     }
                 }
 
@@ -400,8 +442,18 @@ class Dedupe():
         # unittest functionality
         if eval_dict is not None:
             self.eval_dict = eval_dict
-        # make eval_dict addition
-        self.eval_dict[postrand] = {'qscore':qscore,'line':raw_line}
+
+        # determine actions based on single or paired end
+        if self.paired_end:
+            self.eval_dict[postrand] = {
+                'qscore1':qscore1,
+                'qscore2':qscore2,
+                'raw_line1':raw_line1,
+                'raw_line2':raw_line2
+            }
+        elif not self.paired_end:
+            # make eval_dict addition
+            self.eval_dict[postrand] = {'qscore1':qscore1,'raw_line1':raw_line1}
         return self.eval_dict
 
     def dedupe(self):
@@ -444,6 +496,7 @@ class Dedupe():
                 self.summary_dict[self.current_chr] = len(self.eval_dict)
                 self.current_chr = read.rname
                 self.dump_dict_to_sam(
+                    paired_end=self.paired_end,
                     eval_dict=self.eval_dict
                 )
                 self.num_reads_retained += len(self.eval_dict)
@@ -451,22 +504,28 @@ class Dedupe():
                     eval_dict=self.eval_dict
                 )
 
-            # check if pair has already been found
-            # TODO: i'm thinking it would be best if a pair has already been found, to make a change to the first and second reads eval_dict value
-            # TODO: this is great to perform some kind of operation here and then pass that info into evaluate_existence
+            # if paired-end follow paired-end existence
             if self.paired_end:
-                print('paired-end')
-
-            # if erroneous umi, write to discard 
-            # TODO: challenge is to make correction 
-            self.evaluate_existence(
-                postrand=read.postrand, 
-                umi=read.umi, 
-                qscore=read.qscore,
-                raw_line=read.raw_line,
-                eval_dict=self.eval_dict, 
-                randomer_umi=self.randomer_umi
-            )
+                self.evaluate_pair_existence(
+                    paired_end_dict=self.paired_end_dict,
+                    umi=read.umi,
+                    qname=read.qname,
+                    rnext=read.rnext,
+                    postrand=read.postrand,
+                    qscore=read.qscore,
+                    raw_line=read.raw_line,
+                    eval_dict=self.eval_dict,
+                    randomer_umi=self.randomer_umi
+                )
+            elif not self.paired_end:
+                self.evaluate_existence(
+                    postrand=read.postrand, 
+                    umi=read.umi, 
+                    qscore=read.qscore,
+                    raw_line=read.raw_line,
+                    eval_dict=self.eval_dict, 
+                    randomer_umi=self.randomer_umi
+                )
 
         self.open_input_sam.close()
         self.open_retain_sam.close()
@@ -506,8 +565,8 @@ class Dedupe():
             The structure of the dictionary is:
                 {
                     (self.correct_pos, self.strand, self.umi): {
-                        'qscore': float
-                        'line': raw_line
+                        'qscore1': float
+                        'raw_line1': raw_line
                     }
                 }
 
@@ -659,8 +718,7 @@ class SamRead:
         self,
         corrected_pos:int=None,
         strand:str=None,
-        umi:str=None,
-        instance:int=None):
+        umi:str=None):
         """
         generates position, read combo for current read. To be used
         in evaluating whether duplicate or not.
@@ -674,7 +732,7 @@ class SamRead:
         if umi is not None:
             self.umi = umi
 
-        self.postrand = (self.corrected_pos, self.strand, self.umi, 1)
+        self.postrand = (self.corrected_pos, self.strand, self.umi)
         return self.postrand
 
     def determine_strandedness(

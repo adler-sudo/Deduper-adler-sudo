@@ -83,49 +83,60 @@ assert test_samfile_class.umi_filename == umi_filename, "Issue with test_samfile
 test_samread_class = SamRead()
 
 def test_evaluate_pair_existence():
-    paired_end_dict = {
+    test_samfile_class.paired_end_dict = {
         'samplernext':{
             'key': (10, '+', 'sampleumi', 1),
             'partner_key': (20, '-', 'sampleumi', 1)
         }
     }
-    eval_dict = {
-        (10,'+','sampleumi',1):{
-            'qscore':39,
-            'line': 'sampleline\tsampleline'
+    test_samfile_class.eval_dict = {
+        (10,'+','sampleumi',20,'0','sampleumi'):{
+            'qscore1':39,
+            'qscore2':39,
+            'raw_line1': 'sampleline\tsampleline',
+            'raw_line2': 'sampleline\tsampleline'
         }
     }
     assert test_samfile_class.evaluate_pair_existence(
         qname='samplernext',
-        rname='samplercurrent',
-        paired_end_dict=paired_end_dict,
-        eval_dict=eval_dict
+        rnext='samplercurrent',
+        paired_end_dict=test_samfile_class.paired_end_dict,
+        eval_dict=test_samfile_class.eval_dict
     ) == None, "Error in evaluating pair existence."
+
+    test_samfile_class.reset_eval_dict()
 test_evaluate_pair_existence()
 
 def test_write_to_paired_end_dict():
-    paired_end_dict = {}
+    test_samfile_class.paired_end_dict = {}
     paired_end_dict_check = {
-        'samplernext':{
-            'key': (10, '+', 'sampleumi', 1),
-            'partner_key': (20, '-', 'sampleumi', 1)
+        'sampleqname':{
+            'postrand': (10, '+', 'umi'),
+            'qscore': 39,
+            'raw_line': 'sampleline\tsampleline'
         }
     }
-    assert test_samfile_class.write_to_paired_end_dict(
-        paired_end_dict=paired_end_dict,
-        rnext='samplernext',
-        key=(10,'+','sampleumi',1),
-        partner_key=(20,'-','sampleumi',1)
-    ) == paired_end_dict_check, "Paired end dict not being written correctly."
+    test_dict_write = test_samfile_class.write_to_paired_end_dict(
+        paired_end_dict=test_samfile_class.paired_end_dict,
+        qname='sampleqname',
+        postrand=(10,'+','umi'),
+        qscore=39,
+        raw_line='sampleline\tsampleline'
+    )
+    print(test_dict_write)
+    assert test_dict_write == paired_end_dict_check, "Paired end dict not being written correctly."
+    test_samfile_class.reset_eval_dict()
 test_write_to_paired_end_dict()
 
 def test_determine_read_num():
     assert test_samread_class.determine_read_num(64) == 'R1', "SamRead method determine_read_num making error in bit 64 of bitwise flag."
     assert test_samread_class.determine_read_num(128) == 'R2', "SamRead method determine_read_num making error in bit 128 of bitwise flag."
+    test_samfile_class.reset_eval_dict()
 test_determine_read_num()
 
 def test_parse_cigar_string():
     assert test_samread_class.parse_cigar_string(cigar='2S') == ([2],['S']), "Parse cigar string function not separating ints and strings correctly."
+    test_samfile_class.reset_eval_dict()
 test_parse_cigar_string()
 
 def test_read_umis():
@@ -173,7 +184,7 @@ def test_correct_start_position():
 test_correct_start_position()
 
 def test_generate_postrand():
-    assert test_samread_class.generate_postrand(10,"+","ATAT",1) == (10,"+","ATAT",1), "SamRead generate_postrand method generating tuple incorrectly."
+    assert test_samread_class.generate_postrand(10,"+","ATAT") == (10,"+","ATAT"), "SamRead generate_postrand method generating tuple incorrectly."
 test_generate_postrand()
 
 def test_determine_strandedness():
@@ -184,17 +195,17 @@ test_determine_strandedness()
 def test_evaluate_existence():
     test_eval_dict = {
         (10,"+","A"): {
-            "umi": "ACACTGTG",
-            "qscore": 39
+            "qscore1":39,
+            "raw_line1": "sampleline\tsampleline"
         }
     }
     
     existence = test_samfile_class.evaluate_existence(
         postrand=(10,"+","A"),
-        umi="ACACTGTG",
         qscore=39,
         eval_dict=test_eval_dict,
-        randomer_umi=True
+        randomer_umi=True,
+        raw_line='sampleline\tsampleline'
     )
 
     assert existence == True, "Error in Dedupe method evaluate_existence. Not recognizing entry already exists in dictionary."

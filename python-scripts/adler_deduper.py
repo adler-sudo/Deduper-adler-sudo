@@ -61,6 +61,8 @@ if args.keep_highest_qscore:
 if args.umi is None:
     randomer_umi = True
     print('Randomer umi indicated.')
+if args.paired_end and args.keep_highest_qscore:
+    exit("Paired end highest qscore functionality not yet implemented.")
 
 paired_end_dict:dict = {}
 eval_dict:dict = {}
@@ -97,340 +99,6 @@ def read_umis(
 if args.umi is not None:
     umis = read_umis(umi_filename=umi_filename)
 
-def write_to_paired_end_dict(
-    paired_end_dict:dict=None,
-    qname:str=None,
-    postrand:tuple=None,
-    qscore:float=None,
-    raw_line:str=None):
-            
-    """
-    Write to the paired end dictionary.
-
-    Parameters:
-    -----------
-    paired_end_dict : dict
-        The paired-end dictionary.
-
-        Structure:
-        ----------
-        {
-            qname: {
-                'postrand':postrand,
-                'qscore1':qscore,
-                'raw_line1':raw_line 
-            }
-
-    qname : str
-        The name of the current read.
-    qscore : float
-        The quality score of the current read.
-    raw_line : str
-        The raw sam file line of the current read.
-
-    Returns:
-    --------
-    paired_end_dict : dict
-        The paired-end dictionary. See structure above.
-
-    """
-    # unittest functionality
-    if paired_end_dict is not None:
-        paired_end_dict = paired_end_dict
-    # write to paired end
-    paired_end_dict[qname] = {
-        'postrand':postrand,
-        'qscore1':qscore,
-        'raw_line1':raw_line
-    }
-    return paired_end_dict
-
-def reset_paired_end_dict(
-    paired_end_dict:dict=None):
-    """
-    Empties the dictionary.
-
-    Parameters:
-    -----------
-    paired_end_dict : dict
-        The dict to be emptied.
-
-    Returns:
-    --------
-    self.paired_end_dict : dict
-        The empty dictionary.
-
-        The structure of the dictionary is:
-        {}
-    """
-    # unittest functionality
-    if paired_end_dict is not None:
-        paired_end_dict = paired_end_dict
-    paired_end_dict = {}
-    return paired_end_dict
-
-def write_to_eval_dict(
-    postrand:tuple=None,
-    qscore1:float=None,
-    qscore2:float=None,
-    raw_line1:str=None,
-    raw_line2:str=None,
-    eval_dict:dict=None):
-
-    """
-    Writes the current read to the eval_dict. Could be making a new entry or overwriting an existing entry.
-
-    Parameters:
-    -----------
-    postrand : tuple
-        A tuple containing cigar-corrected-position, stand, and umi.
-    qscore : float
-        The quality score of the current read.
-    raw_line : str
-        The raw, tab-delimited line.
-    eval_dict : dict
-        Evaluation dict containing record of reads that have been written to the retention file.
-
-        The structure of the dictionary depends on whether the reads were produced from paired or single end sequencing:
-            
-            SINGLE-END:
-            {
-                (self.correct_pos, self.strand, self.umi): {
-                    'qscore1': float
-                    'raw_line1': raw_line
-                }
-            }
-
-            PAIRED-END
-            {
-                (+ strand position, +, + strand umi, - strand position, -, - strand umi):{
-                    'qscore1': qscore + strand
-                    'qscore2': qscore - strand
-                    'raw_line1': raw_line + strand
-                    'raw_line2': raw_line - strand
-                }
-            }
-
-    Returns:
-    --------
-    self.eval_dict : dict
-        Returns the eval_dict. Really only for the purpose of unittesting.S
-    """
-    # unittest functionality
-    if eval_dict is not None:
-        eval_dict = eval_dict
-
-    # determine actions based on single or paired end
-    if paired_end:
-        eval_dict[postrand] = {
-            'qscore1':qscore1,
-            'qscore2':qscore2,
-            'raw_line1':raw_line1,
-            'raw_line2':raw_line2
-        }
-    elif not paired_end:
-        # make eval_dict addition
-        eval_dict[postrand] = {'qscore1':qscore1,'raw_line1':raw_line1}
-    return eval_dict
-
-def reset_eval_dict(
-    eval_dict:dict=None):
-    """
-    Empties the dictionary.
-
-    Parameters:
-    -----------
-    eval_dict : dict
-        The dict to be emptied.
-
-        The structure of the dictionary is:
-            {
-                (self.correct_pos, self.strand, self.umi): {
-                    'qscore1': float
-                    'raw_line1': raw_line
-                }
-            }
-
-    Returns:
-    --------
-    self.eval_dict : dict
-        The empty dictionary.
-
-        The structure of the dictionary is:
-        {}
-    """
-    # unittest functionality
-    if eval_dict is not None:
-        eval_dict = eval_dict
-    eval_dict = {}
-    return eval_dict
-
-def evaluate_pair_existence(
-    paired_end_dict:dict=None,
-    umi:str=None,
-    qname:str=None,
-    rnext:str=None,
-    postrand:str=None,
-    qscore:float=None,
-    raw_line:str=None,
-    eval_dict:dict=None,
-    randomer_umi:str=None):
-    """
-    Evaluates if pair has already been found. Performs proper steps in reading and writing to the paired_end_dict.
-    
-    Parameters:
-    -----------
-    paired_end_dict : dict
-        The paired-end dictionary that holds the connection between the two pairs
-
-        Structure:
-        ----------
-        See 'write_to_paired_end_dict' for structure.
-    qname : str
-        The qname of the current read being evaluated, which will be the KEY in the paired-end dict because the rname of the pair was used to generate the key.
-    rnext : str
-        The qname of the PAIR.=
-    postrand : tuple
-        The postrand of the current read.
-    qscore : float
-        The qscore of the current read.
-    raw_line : str
-        The raw_line of the current read.
-    eval_dict : dict
-        The evaluation dictionary. NOTE: may not need this, as the eval_dict functions will be carried out in the 'evaluate_existence' function.
-
-    Returns:
-    --------
-    None
-    """
-    # unittest functionality
-    if paired_end_dict is not None:
-        paired_end_dict = paired_end_dict
-    if eval_dict is not None:
-        eval_dict = eval_dict
-    # combine current read with partner if they match
-    if rnext in paired_end_dict:
-        # then combine and write to eval_dict
-        pair_postrand = paired_end_dict[rnext]['postrand']
-        # place positive read first in combo
-        if postrand[1] == '+':
-            combo_postrand = postrand + pair_postrand
-        elif pair_postrand[1] == '+':
-            combo_postrand = pair_postrand + postrand
-        # combine and write to eval_dict if doesn't already exist
-        if combo_postrand not in eval_dict:
-            write_to_eval_dict(
-                postrand=combo_postrand,
-                qscore1=qscore,
-                qscore2=paired_end_dict[rnext]['qscore'],
-                raw_line1=raw_line,
-                raw_line2=paired_end_dict[rnext]['raw_line'],
-                eval_dict=eval_dict
-            )
-        # remove pair from paired end dict now that it has been transferred to eval_dict
-        paired_end_dict.pop(qname,None)
-        paired_end_dict.pop(rnext,None)
-    # write instance to the paired_end_dict if its partner doesn't exist
-    elif rnext not in paired_end_dict:
-        write_to_paired_end_dict(
-            paired_end_dict=paired_end_dict,
-            qname=qname,
-            postrand=postrand,
-            qscore=qscore,
-            raw_line=raw_line
-        )
-    return paired_end_dict, eval_dict
-
-def evaluate_existence(
-    postrand:tuple=None,
-    umi:str=None,
-    qscore:float=None,
-    raw_line:str=None,
-    qname:str=None,
-    rname:str=None,
-    eval_dict:dict=None,
-    randomer_umi:bool=None,
-    keep_highest_qscore:bool=None,
-    incorrect_umi:int=None):
-    """
-    Evaluates if read already exists in eval_dict. Writes read to dictionary and output file if it does not already exist.
-
-    Parameters:
-    -----------
-    postrand : tuple
-        A tuple containing cigar-corrected-position, stand, and umi.
-
-        Example:
-        --------
-
-        (100, "+", "ATGCATGC", 1)
-
-    umi : str
-        Contains the UMI sequence for the current read.
-    qscore : float
-        The quality score of the current read.
-    raw_line : str
-        The raw, tab-delimited line.
-    eval_dict : dict
-        Evaluation dict containing record of reads that have been written to the retention file.
-
-        The structure of the dictionary is:
-            {
-                (self.correct_pos, self.strand, self.umi): {
-                    'qscore1': float,
-                    'raw_line1': raw_line
-                }
-            }
-
-    randomer_umi : bool
-        Set to True when no UMI file is specified.
-        Set to False when UMI file is specified.
-    keep_highest_score : bool
-        When set to True, will keep the highest qscore in the case of PCR duplicates.
-        When set to False, will keep the first read encountered in the case of PCR duplicates.
-
-    Returns:
-    --------
-    """
-    if eval_dict is not None:
-        eval_dict = eval_dict
-    if randomer_umi is not None:
-        randomer_umi = randomer_umi
-    if keep_highest_qscore is not None:
-        keep_highest_qscore = keep_highest_qscore
-    
-    # TODO: think i can make this simpler but not seeing it now
-    if randomer_umi:
-        if postrand not in eval_dict:
-            # TODO: this should really be its own function
-            eval_dict = write_to_eval_dict(
-                    postrand=postrand,
-                    qscore1=qscore,
-                    raw_line1=raw_line)
-        elif keep_highest_qscore and eval_dict[postrand]['qscore1'] < qscore:
-            eval_dict = write_to_eval_dict(
-                    postrand=postrand,
-                    qscore1=qscore,
-                    raw_line1=raw_line)
-    elif not randomer_umi:
-        if umi in umis:
-            if postrand not in eval_dict:
-                # TODO: this should really be its own function
-                eval_dict = write_to_eval_dict(
-                    postrand=postrand,
-                    qscore1=qscore,
-                    raw_line1=raw_line,
-                    eval_dict=eval_dict)
-            elif keep_highest_qscore and eval_dict[postrand]['qscore1'] < qscore:
-                eval_dict = write_to_eval_dict(
-                    postrand=postrand,
-                    qscore1=qscore,
-                    raw_line1=raw_line,
-                    eval_dict=eval_dict)
-                print("higher quality read encountered")
-        elif umi not in umis:
-            incorrect_umi += 1 # TODO: add unittest for this
-    return eval_dict, incorrect_umi
 
 def dedupe(
     input_filename:str=input_filename,
@@ -457,24 +125,26 @@ def dedupe(
             # write last chromosome to summary dict
             summary_dict[current_chr] = len(eval_dict)
                 # dump last chromosome to sam
-            dump_dict_to_sam(
-                open_retain_sam=open_retain_sam,
-                eval_dict=eval_dict
-            )
+            if paired_end:
+                for record in eval_dict:
+                    raw_line1 = eval_dict[record]['raw_line1']
+                    raw_line2 = eval_dict[record]['raw_line2']
+                    open_retain_sam.write(raw_line1)
+                    if raw_line2 is not None:
+                        open_retain_sam.write(raw_line2)
+            elif not paired_end:
+                for record in eval_dict:
+                    raw_line1 = eval_dict[record]['raw_line1']
+                    open_retain_sam.write(raw_line1)
             break
         if line[0] == '@': # store header lines
-            write_to_retain(
-                open_retain_sam=open_retain_sam,
-                line=line
-            )
+            open_retain_sam.write(line)
             header_length += 1 
             continue
         total_reads += 1 # made it through all evalutation steps
 
-        # TODO: all of the SamRead class functions will exist here
-        split_line = set_read(
-            raw_line=line
-        )
+        # generate all of our values for the current line
+        split_line = line.split('\t')
         qname, umi, flag, rname, pos, cigar, rnext, qscore = parse_columns(split_line)
         strand = determine_strandedness(flag)
         cigar_nums, cigar_letters = parse_cigar_string(cigar=cigar)
@@ -491,27 +161,33 @@ def dedupe(
             umi=umi
         )
 
-        # reset dictionary if we've reached a new chromosome
+        # new chromosome endcountered
         if rname != current_chr:
-            print("Initiating chromosome {} processing.".format(rname))
             summary_dict[current_chr] = len(eval_dict)
             current_chr = rname
-            # write unpaired reads to eval dict
+            
             if paired_end:
+                # write unpaired reads to sam
                 for unpaired_read in paired_end_dict:
-                    eval_dict[unpaired_read]['rawline1'] = paired_end_dict[unpaired_read]['raw_line1']
-            dump_dict_to_sam(
-                open_retain_sam=open_retain_sam,
-                paired_end=paired_end,
-                eval_dict=eval_dict
-            )
-            # TODO: need to fix how this counts for paired end
-            num_reads_retained += len(eval_dict)
+                    open_retain_sam.write(paired_end_dict[unpaired_read]['raw_line1'])
+                # write eval dict to sam
+                for record in eval_dict:
+                    raw_line1 = eval_dict[record]['raw_line1']
+                    raw_line2 = eval_dict[record]['raw_line2']
+                    open_retain_sam.write(raw_line1)
+                    if raw_line2 is not None:
+                        open_retain_sam.write(raw_line2)
+                num_reads_retained += len(eval_dict) + len(paired_end_dict)
+            elif not paired_end:
+                for record in eval_dict:
+                    raw_line1 = eval_dict[record]['raw_line1']
+                    open_retain_sam.write(raw_line1)
+                num_reads_retained += len(eval_dict)
             # reset the dictionaries
             eval_dict = {}
             paired_end_dict = {}
 
-        # if paired-end follow paired-end existence
+        # processing each read
         if paired_end:
             # combine current read with partner if they match
             if rnext in paired_end_dict:
@@ -537,12 +213,22 @@ def dedupe(
                 paired_end_dict.pop(qname,None)
                 paired_end_dict.pop(rnext,None)
             # write instance to the paired_end_dict if its partner doesn't exist
-            elif rnext not in paired_end_dict:
+            else:
+                if randomer_umi:
                     paired_end_dict[qname] = {
                         'postrand':postrand,
                         'qscore1':qscore,
                         'raw_line1':line
                     }
+                elif not randomer_umi:
+                    if umi in umis:
+                        paired_end_dict[qname] = {
+                        'postrand':postrand,
+                        'qscore1':qscore,
+                        'raw_line1':line
+                        }
+                    else:
+                        incorrect_umi += 1
         elif not paired_end:
             if randomer_umi:
                 if postrand not in eval_dict:
@@ -569,7 +255,7 @@ def dedupe(
                             'raw_line1':line
                         }
                         print("higher quality read encountered")
-                elif umi not in umis:
+                else:
                     incorrect_umi += 1 # TODO: add unittest for this
 
     open_input_sam.close()
@@ -584,60 +270,6 @@ def dedupe(
     for entry in summary_dict:
         print(entry,summary_dict[entry],sep=": ")
 
-def dump_dict_to_sam(
-    open_retain_sam:None,
-    paired_end:bool=None,
-    eval_dict:dict=None):
-    """
-    write the eval_dict to the retain sam file
-    """
-    # determine action based on single or paired end
-    if paired_end:
-        for record in eval_dict:
-            raw_line1 = eval_dict[record]['raw_line1']
-            raw_line2 = eval_dict[record]['raw_line2']
-            write_to_retain(raw_line1)
-            if raw_line2 is not None:
-                write_to_retain(
-                    open_retain_sam=open_retain_same,
-                    line=raw_line2
-                )
-    elif not paired_end:
-        for record in eval_dict:
-            line = eval_dict[record]['raw_line1']
-            write_to_retain(
-                open_retain_sam=open_retain_sam,
-                line=line
-            )
-
-def write_to_retain(
-    open_retain_sam=None,
-    line:str=None):
-    """
-    Writes a line to the retain file.
-
-    Parameters:
-    -----------
-    open_retain_sam : wrapper object for open sam retain file
-        Opened in dedupe function.
-    line : str
-        The raw line to be written.
-
-    Returns:
-    --------
-    None
-    """
-    open_retain_sam.write(line)
-    return None
-
-def set_read(
-    raw_line:str=None):
-    """
-    sets the sam read
-    """
-    if raw_line is not None:
-        line = raw_line.split('\t')
-        return line
 
 def parse_columns(
     split_line:list=None):
@@ -750,15 +382,6 @@ def generate_postrand(
     generates position, read combo for current read. To be used
     in evaluating whether duplicate or not.
     """
-
-    # unittest functionality
-    if corrected_pos is not None:
-        corrected_pos = corrected_pos
-    if strand is not None:
-        strand = strand
-    if umi is not None:
-        umi = umi
-
     postrand = (corrected_pos, strand, umi)
     return postrand
 

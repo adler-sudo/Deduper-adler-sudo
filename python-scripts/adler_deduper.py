@@ -38,11 +38,12 @@ def parse_args(args):
 
 args = parse_args(sys.argv[1:])
 
-# define globals
+# initiate files
 input_filename:str = args.input_file
 umi_filename:str = args.umi
 retain_filename:str = args.output_retain_file
 
+# initatie optional input arguments
 paired_end:bool = False
 keep_highest_qscore:bool = False
 randomer_umi:bool = False
@@ -64,10 +65,12 @@ if args.umi is None:
 if args.paired_end and args.keep_highest_qscore:
     exit("Paired end highest qscore functionality not yet implemented.")
 
+# initiate all dictionaries
 paired_end_dict:dict = {}
 eval_dict:dict = {}
 summary_dict:dict = {}
 
+# initiate counters for summary
 num_reads_retained:int = 0
 incorrect_umi:int = 0
 total_reads:int = 0
@@ -96,10 +99,6 @@ def read_umis(
         open_umis.close()
     return umis
 
-if args.umi is not None:
-    umis = read_umis(umi_filename=umi_filename)
-
-
 def dedupe(
     input_filename:str=input_filename,
     retention_filename:str=retain_filename,
@@ -124,7 +123,7 @@ def dedupe(
             num_reads_retained += len(eval_dict)
             # write last chromosome to summary dict
             summary_dict[current_chr] = len(eval_dict)
-                # dump last chromosome to sam
+            # dump last chromosome to sam
             if paired_end:
                 for record in eval_dict:
                     raw_line1 = eval_dict[record]['raw_line1']
@@ -137,13 +136,14 @@ def dedupe(
                     raw_line1 = eval_dict[record]['raw_line1']
                     open_retain_sam.write(raw_line1)
             break
-        if line[0] == '@': # store header lines
+        # process header lines
+        if line[0] == '@':
             open_retain_sam.write(line)
             header_length += 1 
             continue
         total_reads += 1 # made it through all evalutation steps
 
-        # generate all of our values for the current line
+        # generate all of our values for the current read
         split_line = line.split('\t')
         qname, umi, flag, rname, pos, cigar, rnext, qscore = parse_columns(split_line)
         strand = determine_strandedness(flag)
@@ -155,6 +155,7 @@ def dedupe(
             cigar_nums=cigar_nums,
             cigar_letters=cigar_letters
         )
+        # generate the unique key for this read
         postrand = generate_postrand(
             corrected_pos=corrected_pos,
             strand=strand,
@@ -198,17 +199,17 @@ def dedupe(
                     combo_postrand = postrand + pair_postrand
                 elif pair_postrand[1] == '+':
                     combo_postrand = pair_postrand + postrand
-                # combine and write to eval_dict if doesn't already exist
+                # write pair to eval_dict if combo key doesn't already exist
                 if combo_postrand not in eval_dict:
-                        qscore2=paired_end_dict[rnext]['qscore']
-                        raw_line2=paired_end_dict[rnext]['raw_line']
-                        # write to eval_dict
-                        eval_dict[postrand] = {
-                            'qscore1':qscore,
-                            'qscore2':qscore2,
-                            'raw_line1':line,
-                            'raw_line2':raw_line2
-                        }
+                    qscore2=paired_end_dict[rnext]['qscore']
+                    raw_line2=paired_end_dict[rnext]['raw_line']
+                    # write to eval_dict
+                    eval_dict[postrand] = {
+                        'qscore1':qscore,
+                        'qscore2':qscore2,
+                        'raw_line1':line,
+                        'raw_line2':raw_line2
+                    }
                 # remove pair from paired end dict now that it has been transferred to eval_dict
                 paired_end_dict.pop(qname,None)
                 paired_end_dict.pop(rnext,None)
@@ -236,6 +237,7 @@ def dedupe(
                         'qscore1':qscore,
                         'raw_line1':line
                     }
+                # evaluate whether qscore is higher than current stored qscore
                 elif keep_highest_qscore and eval_dict[postrand]['qscore1'] < qscore:
                     eval_dict[postrand] = {
                         'qscore1':qscore,
@@ -244,11 +246,11 @@ def dedupe(
             elif not randomer_umi:
                 if umi in umis:
                     if postrand not in eval_dict:
-                        # TODO: this should really be its own function
                         eval_dict[postrand] = {
                             'qscore1':qscore,
                             'raw_line1':line
                         }
+                    # evaluate whether qscore is higher than current stored qscore
                     elif keep_highest_qscore and eval_dict[postrand]['qscore1'] < qscore:
                         eval_dict[postrand] = {
                             'qscore1':qscore,
@@ -256,13 +258,12 @@ def dedupe(
                         }
                         print("higher quality read encountered")
                 else:
-                    incorrect_umi += 1 # TODO: add unittest for this
+                    incorrect_umi += 1
 
     open_input_sam.close()
     open_retain_sam.close()
     
-    # finish up summary dict 
-    # TODO: turn this into a function
+    # finish up and print summary dict
     summary_dict['header_length'] = header_length
     summary_dict['total_reads'] = total_reads
     summary_dict['incorrect_umi'] = incorrect_umi
@@ -270,9 +271,35 @@ def dedupe(
     for entry in summary_dict:
         print(entry,summary_dict[entry],sep=": ")
 
-
 def parse_columns(
     split_line:list=None):
+    """"
+    Splits the current SAM file line into its component pieces.
+
+    Parameters:
+    -----------
+    split_line : list
+        The split line represented as a list. Each column of the current read is represented as a component of the list.
+
+    Returns:
+    --------
+    qname : str
+        The qname of the current SAM file read.
+    umi : str
+        The umi of the current SAM file read.
+    flag : int
+        The bitwise flag of the current SAM file read.
+    rname : str
+        The chromosome of the current SAM file read.
+    pos : int
+        The leftmost mapped position for the current SAM file read.
+    cigar : str
+        The CIGAR string for the current SAM file read.
+    rnext : str
+        The name of the pair in the case paired end reads.
+    qscore : float
+        The average qscore fo the current SAM file read.
+    """
     qname = split_line[0]
     umi = qname.split(':')[-1]
     flag = int(split_line[1])
@@ -310,16 +337,8 @@ def correct_start_position(
 
     # initiate corrected postiion
     corrected_pos = pos
-
-    # unittesting functionality
-    if pos is not None:
-        corrected_pos = pos
-    if cigar is not None:
-        cigar = cigar
-    if strand is not None:
-        strand = strand
-
-    # evaluate if soft clipping present
+    
+    # split the cigar string into nums and letters
     cigar_nums, cigar_letters = parse_cigar_string(
         cigar=cigar
     )
@@ -328,21 +347,21 @@ def correct_start_position(
         'I': 0,
         'M': +1,
         'S': +1,
-        'N': +1, # TODO: check to make sure this is right
+        'N': +1,
     }
 
     # amake position correction based on cigar string
     if strand == "+":
-        # just have to subtract on the forward
+        # subtract the first soft clip on the forward
         if cigar_letters[0] == 'S':
             correction = cigar_nums[0]
             corrected_pos = corrected_pos - correction
     elif strand == "-":
-        # TODO: need to actually take the whole cigar string into account on the reverse
         if cigar_letters[0] == 'S':
             cigar_letters.pop(0) # ignore the first soft clip if reverse cause this is referring to the 3' end
             cigar_nums.pop(0)
         if len(cigar_letters) > 0:
+            # determine the correction quanitity from the cigar string
             cigar_letters = [*map(minus_strand_map.get,cigar_letters)]
             cigar_nums = [map_val * distance for map_val, distance in zip(cigar_letters,cigar_nums)]
             correction = sum(list(map(int,cigar_nums))) # convert to ints before summing
@@ -381,6 +400,24 @@ def generate_postrand(
     """
     generates position, read combo for current read. To be used
     in evaluating whether duplicate or not.
+
+    Parameters:
+    -----------
+    corrected_pos : int
+        The cigar corrected start position of the current read.
+    strand : str
+        + for forward strand, - for the reverse strand
+    umi : str
+        The umi for the current read.
+
+    Returns:
+    --------
+    postrand : tuple
+        A tuple to be used as the reads unique key. 
+        
+        Structure:
+        ----------
+        (corrected_pos, strand, umi)
     """
     postrand = (corrected_pos, strand, umi)
     return postrand
@@ -388,14 +425,31 @@ def generate_postrand(
 def determine_strandedness(
     flag:int=None):
     """
-    determines strandedness by looking at 16 of bitwise flag
+    Determines strandedness by looking at 16 of bitwise flag.
+
+    Parameters:
+    -----------
+    flag : in
+        The bitwise flag for the current read
+
+    Returns:
+    --------
+    strand : str
+        + if forward strand, - if reverse strand
     """
+    # use the bit 16 to determine strandednes
     if ((flag & 16) == 16):
         strand = "-" # reverse
     else:
         strand = "+" # forward
     return strand
 
+
+# read in umi file if umis specified
+if args.umi is not None:
+    umis = read_umis(umi_filename=umi_filename)
+
+# run dedupe
 dedupe(
     input_filename=input_filename,
     retention_filename=retain_filename,

@@ -1,45 +1,3 @@
-Initiating chromosome 10 processing.
-Initiating chromosome 11 processing.
-Initiating chromosome 12 processing.
-Initiating chromosome 13 processing.
-Initiating chromosome 14 processing.
-Initiating chromosome 15 processing.
-Initiating chromosome 16 processing.
-Initiating chromosome 17 processing.
-Initiating chromosome 18 processing.
-Initiating chromosome 19 processing.
-Initiating chromosome 2 processing.
-Initiating chromosome 3 processing.
-Initiating chromosome 4 processing.
-Initiating chromosome 5 processing.
-Initiating chromosome 6 processing.
-Initiating chromosome 7 processing.
-Initiating chromosome 8 processing.
-Initiating chromosome 9 processing.
-Initiating chromosome MT processing.
-Initiating chromosome X processing.
-Initiating chromosome Y processing.
-Initiating chromosome JH584299.1 processing.
-Initiating chromosome GL456233.2 processing.
-Initiating chromosome GL456211.1 processing.
-Initiating chromosome GL456221.1 processing.
-Initiating chromosome GL456354.1 processing.
-Initiating chromosome GL456210.1 processing.
-Initiating chromosome GL456212.1 processing.
-Initiating chromosome JH584304.1 processing.
-Initiating chromosome GL456379.1 processing.
-Initiating chromosome GL456367.1 processing.
-Initiating chromosome GL456239.1 processing.
-Initiating chromosome GL456383.1 processing.
-Initiating chromosome MU069435.1 processing.
-Initiating chromosome GL456389.1 processing.
-Initiating chromosome GL456370.1 processing.
-Initiating chromosome GL456390.1 processing.
-Initiating chromosome GL456382.1 processing.
-Initiating chromosome GL456396.1 processing.
-Initiating chromosome GL456368.1 processing.
-Initiating chromosome MU069434.1 processing.
-Initiating chromosome JH584295.1 processing.
 1: 697508
 10: 564903
 11: 1220389
@@ -87,21 +45,21 @@ header_length: 66
 total_reads: 18186410
 incorrect_umi: 0
 reads_retained: 13719048
-	Command being timed: "./python-scripts/adler_deduper.py -f /projects/bgmp/jadler2/bioinfo/Bi624/Deduper-adler-sudo/sam-files/C1_SE_uniqAlign.sam -u /projects/bgmp/jadler2/bioinfo/Bi624/Deduper-adler-sudo/STL96.txt -o /projects/bgmp/jadler2/bioinfo/Bi624/Deduper-adler-sudo/sam-files/C1_SE_uniqAlign.retain.sam"
-	User time (seconds): 415.71
-	System time (seconds): 10.97
+	Command being timed: "./python-scripts/adler_deduper.py -f /projects/bgmp/jadler2/bioinfo/Bi624/Deduper-adler-sudo/sam-files/C1_SE_uniqAlign.sam -u /projects/bgmp/jadler2/bioinfo/Bi624/Deduper-adler-sudo/STL96.txt -o /projects/bgmp/jadler2/bioinfo/Bi624/Deduper-adler-sudo/sam-files/C1_SE_uniqAlign_deduped.sam"
+	User time (seconds): 308.65
+	System time (seconds): 6.98
 	Percent of CPU this job got: 99%
-	Elapsed (wall clock) time (h:mm:ss or m:ss): 7:08.25
+	Elapsed (wall clock) time (h:mm:ss or m:ss): 5:16.82
 	Average shared text size (kbytes): 0
 	Average unshared data size (kbytes): 0
 	Average stack size (kbytes): 0
 	Average total size (kbytes): 0
-	Maximum resident set size (kbytes): 2766752
+	Maximum resident set size (kbytes): 2766436
 	Average resident set size (kbytes): 0
 	Major (requiring I/O) page faults: 0
-	Minor (reclaiming a frame) page faults: 3522240
-	Voluntary context switches: 1842
-	Involuntary context switches: 1317
+	Minor (reclaiming a frame) page faults: 3227135
+	Voluntary context switches: 1856
+	Involuntary context switches: 941
 	Swaps: 0
 	File system inputs: 0
 	File system outputs: 0

@@ -47,20 +47,20 @@ total_reads: 18186410
 incorrect_umi: 0
 reads_retained: 13719048
 	Command being timed: "./python-scripts/adler_deduper.py -f /projects/bgmp/jadler2/bioinfo/Bi624/Deduper-adler-sudo/sam-files/C1_SE_uniqAlign.sam -u /projects/bgmp/jadler2/bioinfo/Bi624/Deduper-adler-sudo/STL96.txt -o /projects/bgmp/jadler2/bioinfo/Bi624/Deduper-adler-sudo/sam-files/C1_SE_uniqAlign_deduped.sam -q"
-	User time (seconds): 307.29
-	System time (seconds): 6.96
+	User time (seconds): 304.97
+	System time (seconds): 7.18
 	Percent of CPU this job got: 99%
-	Elapsed (wall clock) time (h:mm:ss or m:ss): 5:15.43
+	Elapsed (wall clock) time (h:mm:ss or m:ss): 5:13.57
 	Average shared text size (kbytes): 0
 	Average unshared data size (kbytes): 0
 	Average stack size (kbytes): 0
 	Average total size (kbytes): 0
-	Maximum resident set size (kbytes): 2769316
+	Maximum resident set size (kbytes): 2767356
 	Average resident set size (kbytes): 0
 	Major (requiring I/O) page faults: 0
-	Minor (reclaiming a frame) page faults: 3221706
-	Voluntary context switches: 1893
-	Involuntary context switches: 911
+	Minor (reclaiming a frame) page faults: 3278515
+	Voluntary context switches: 1141
+	Involuntary context switches: 833
 	Swaps: 0
 	File system inputs: 0
 	File system outputs: 0

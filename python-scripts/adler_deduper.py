@@ -12,7 +12,7 @@ def parse_args(args):
     parser = argparse.ArgumentParser(description="Reference-based PCR duplicate removal from mapped SAM file")
     parser.add_argument(
         "-f",
-        "--input_file", 
+        "--file", 
         help="Input SAM file - sorted, mapped reads")
     parser.add_argument(
         "-o",
@@ -21,7 +21,7 @@ def parse_args(args):
     )
     parser.add_argument(
         "-p", 
-        "--paired-end", 
+        "--paired", 
         action="store_true", 
         help="Designates file is paired end. If flag is not set, the program will assume single end reads.")
     parser.add_argument(
@@ -39,7 +39,7 @@ def parse_args(args):
 args = parse_args(sys.argv[1:])
 
 # initiate files
-input_filename:str = args.input_file
+input_filename:str = args.file
 umi_filename:str = args.umi
 retain_filename:str = args.output_retain_file
 
@@ -49,11 +49,11 @@ keep_highest_qscore:bool = False
 randomer_umi:bool = False
 
 # argparser
-if args.input_file is None:
+if args.file is None:
     exit("ATTENTION: Exiting script!\nPlease specify a sorted SAM file utilizing the input_file flag (-f, --input_file).")
 if args.output_retain_file is None:
     exit("ATTENTION: Exiting script!\nPlease specify a filename to which the uniquely mapped reads will be written.")
-if args.paired_end:
+if args.paired:
     paired_end = True
     print('Paired end SAM file indicated.')
 if args.keep_highest_qscore:
@@ -62,13 +62,16 @@ if args.keep_highest_qscore:
 if args.umi is None:
     randomer_umi = True
     print('Randomer umi indicated.')
-if args.paired_end and args.keep_highest_qscore:
-    exit("Paired end highest qscore functionality not yet implemented.")
+if args.paired and args.keep_highest_qscore:
+    exit("ATTENTION: Exiting script!\nPaired end highest qscore functionality not yet implemented.")
 
 # initiate all dictionaries
-paired_end_dict:dict = {}
-eval_dict:dict = {}
-summary_dict:dict = {}
+paired_end_dict:dict = {} # paired_end_dict = {qname + '1': {'postrand': (pos, strand, umi), 'qscore1': qscore, 'raw_line1': rawline}}
+eval_dict:dict = {} # eval_dict = {(pos,strand,umi): {'qscore1': qscore R1, 'qscore2': qscore R2, 'raw_line1': rawline R1, 'raw_line2': rawline R2}}
+# eval_dict key changes for PE - combo of R1 and R2 postrand: (pos1, strand1, umi1, pos2, strand2, umi2)
+
+summary_dict:dict = {} # summary_dict counts number of occurrences of each chromosome, headers, lines retained, incorrect umis, and total reads
+# summary dict is printed to the console at completion of the run
 
 # initiate counters for summary
 num_reads_retained:int = 0
@@ -162,7 +165,7 @@ def dedupe(
             umi=umi
         )
 
-        # new chromosome endcountered
+        # new chromosome encountered
         if rname != current_chr:
             summary_dict[current_chr] = len(eval_dict)
             current_chr = rname
@@ -201,8 +204,8 @@ def dedupe(
                     combo_postrand = pair_postrand + postrand
                 # write pair to eval_dict if combo key doesn't already exist
                 if combo_postrand not in eval_dict:
-                    qscore2=paired_end_dict[rnext]['qscore']
-                    raw_line2=paired_end_dict[rnext]['raw_line']
+                    qscore2=paired_end_dict[rnext]['qscore1']
+                    raw_line2=paired_end_dict[rnext]['raw_line1']
                     # write to eval_dict
                     eval_dict[postrand] = {
                         'qscore1':qscore,
@@ -215,11 +218,12 @@ def dedupe(
                 paired_end_dict.pop(rnext,None)
             # write instance to the paired_end_dict if its partner doesn't exist
             else:
+                qname = qname + '1'
                 if randomer_umi:
                     paired_end_dict[qname] = {
                         'postrand':postrand,
                         'qscore1':qscore,
-                        'raw_line1':line
+                        'raw_line1':line,
                     }
                 elif not randomer_umi:
                     if umi in umis:
@@ -256,7 +260,6 @@ def dedupe(
                             'qscore1':qscore,
                             'raw_line1':line
                         }
-                        print("higher quality read encountered")
                 else:
                     incorrect_umi += 1
 
@@ -306,7 +309,10 @@ def parse_columns(
     rname = split_line[2]
     pos = int(split_line[3])
     cigar = split_line[5]
+    # rnext sometimes equal to qname
     rnext = split_line[6]
+    if rnext == '=':
+        rnext = qname + '1' # add a one for downstream differentiation
     qscore = qual_score(split_line[10])
     return qname, umi, flag, rname, pos, cigar, rnext, qscore
 

@@ -114,6 +114,59 @@ def dedupe(
     incorrect_umi:int=incorrect_umi):
     """
     Deduplicates the input SAM file.
+
+    Parameters:
+    -----------
+    input_filename : str
+        The sorted input SAM file to be deduped.
+    retention_filename : str
+        The SAM file to write the uniquely mapped reads to.
+    summary_dict : dict
+        A dictionary to hold summary items. Chromosome, num_headers, lines retained, incorrect umis, and total reads.
+    eval_dict : dict
+        The dictionary used to hold reads that will be written to retnetion file at the end of each chromosome.
+        
+        Structure:
+        ----------
+        SINGLE-END:
+                {
+                    (self.correct_pos, self.strand, self.umi): {
+                        'qscore1': float
+                        'raw_line1': raw_line
+                    }
+                }
+
+        PAIRED-END
+        {
+            (+ strand position, +, + strand umi, - strand position, -, - strand umi):{
+                'qscore1': qscore + strand
+                'qscore2': qscore - strand
+                'raw_line1': raw_line + strand
+                'raw_line2': raw_line - strand
+            }
+        }
+
+    paired_end_dict : dict
+        Only utilized in paired end deduplication. Holds on to reads that have not yet been paired.
+        We add a '1' to the end of the qname for use in downstream differentiation of the pair in the case that they have the same qname.
+
+        Structure:
+        ----------
+        {
+            qname + '1': {
+                'postrand':postrand,
+                'qscore1':qscore,
+                'raw_line1':raw_line 
+            }
+
+    paired_end : bool
+        When marked True, indicates that input file is from paired end sequencing.
+    total_reads : int
+        Total reads in the file.
+    num_reads_retained : int
+        Number of reads retained after deduplication is complete.
+    incorrect_umi : int
+        Number of incorrect umis found and discarded.
     """
     open_input_sam = open(input_filename,'r')
     open_retain_sam = open(retention_filename,'w')

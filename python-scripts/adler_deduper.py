@@ -357,7 +357,7 @@ def parse_columns(
         The average qscore fo the current SAM file read.
     """
     qname = split_line[0]
-    umi = qname.split(':')[-1]
+    umi = qname.split(':')[0]
     flag = int(split_line[1])
     rname = split_line[2]
     pos = int(split_line[3])

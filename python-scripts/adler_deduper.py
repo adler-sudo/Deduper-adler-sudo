@@ -401,6 +401,8 @@ def correct_start_position(
     cigar_nums, cigar_letters = parse_cigar_string(
         cigar=cigar
     )
+    
+    # TODO: add hard clipping
     minus_strand_map = {
         'D': +1,
         'I': 0,
@@ -420,11 +422,15 @@ def correct_start_position(
             cigar_letters.pop(0) # ignore the first soft clip if reverse cause this is referring to the 3' end
             cigar_nums.pop(0)
         if len(cigar_letters) > 0:
-            # determine the correction quanitity from the cigar string
-            cigar_letters = [*map(minus_strand_map.get,cigar_letters)]
-            cigar_nums = [map_val * distance for map_val, distance in zip(cigar_letters,cigar_nums)]
-            correction = sum(list(map(int,cigar_nums))) # convert to ints before summing
-            corrected_pos = corrected_pos + correction # could put minus one here, but as long as it's consistent it doesn't matter
+            try:
+                # determine the correction quanitity from the cigar string
+                cigar_letters = [*map(minus_strand_map.get,cigar_letters)]
+                cigar_nums = [map_val * distance for map_val, distance in zip(cigar_letters,cigar_nums)]
+                correction = sum(list(map(int,cigar_nums))) # convert to ints before summing
+                corrected_pos = corrected_pos + correction # could put minus one here, but as long as it's consistent it doesn't matter
+            except TypeError:
+                print(pos,cigar,strand,cigar_nums,cigar_letters)
+                pass
     return corrected_pos
 
 def parse_cigar_string(

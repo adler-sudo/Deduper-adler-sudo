@@ -73,6 +73,9 @@ eval_dict:dict = {} # eval_dict = {(pos,strand,umi): {'qscore1': qscore R1, 'qsc
 summary_dict:dict = {} # summary_dict counts number of occurrences of each chromosome, headers, lines retained, incorrect umis, and total reads
 # summary dict is printed to the console at completion of the run
 
+duplicate_dict:dict = {} # duplicate_dict keeps track of duplicatesw by barcode
+# structure {umi: {'duplicate_reads': int, 'total_reads': int}}
+
 # initiate counters for summary
 num_reads_retained:int = 0
 incorrect_umi:int = 0
@@ -108,7 +111,7 @@ def dedupe(
     summary_dict:dict=summary_dict,
     eval_dict:dict=eval_dict,
     paired_end_dict:dict=paired_end_dict,
-    duplicate_dict:dict,
+    duplicate_dict:dict=duplicate_dict,
     paired_end:bool=paired_end,
     total_reads:int=total_reads,
     num_reads_retained:int=num_reads_retained,
@@ -184,7 +187,6 @@ def dedupe(
     open_retain_sam = open(retention_filename,'w')
     header_length = 0
     current_chr = '1'
-    duplicate_dict = {}
 
     while True:
         line = open_input_sam.readline()
@@ -243,9 +245,9 @@ def dedupe(
             current_chr = rname
             
             if paired_end:
-                # write unpaired reads to sam
-                for unpaired_read in paired_end_dict:
-                    open_retain_sam.write(paired_end_dict[unpaired_read]['raw_line1'])
+                # # write unpaired reads to sam
+                # for unpaired_read in paired_end_dict:
+                #     open_retain_sam.write(paired_end_dict[unpaired_read]['raw_line1'])
                 # write eval dict to sam
                 for record in eval_dict:
                     raw_line1 = eval_dict[record]['raw_line1']
@@ -279,7 +281,7 @@ def dedupe(
                     qscore2=paired_end_dict[rnext]['qscore1']
                     raw_line2=paired_end_dict[rnext]['raw_line1']
                     # write to eval_dict
-                    eval_dict[postrand] = {
+                    eval_dict[combo_postrand] = {
                         'qscore1':qscore,
                         'qscore2':qscore2,
                         'raw_line1':line,
@@ -624,4 +626,6 @@ dedupe(
     paired_end_dict=paired_end_dict,
     paired_end=paired_end
 )
+
+print(duplicate_dict)
 

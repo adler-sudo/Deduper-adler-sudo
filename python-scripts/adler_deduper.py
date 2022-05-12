@@ -108,6 +108,7 @@ def dedupe(
     summary_dict:dict=summary_dict,
     eval_dict:dict=eval_dict,
     paired_end_dict:dict=paired_end_dict,
+    duplicate_dict:dict,
     paired_end:bool=paired_end,
     total_reads:int=total_reads,
     num_reads_retained:int=num_reads_retained,
@@ -159,6 +160,17 @@ def dedupe(
                 'raw_line1':raw_line 
             }
 
+    duplicate_dict : dict
+        Tracks number of duplicates encountered for each umi
+
+        Structure:
+        ----------
+        {
+            umi: {
+                'duplicate_reads': int,
+                'total_reads': int
+            }
+        }
     paired_end : bool
         When marked True, indicates that input file is from paired end sequencing.
     total_reads : int
@@ -172,6 +184,7 @@ def dedupe(
     open_retain_sam = open(retention_filename,'w')
     header_length = 0
     current_chr = '1'
+    duplicate_dict = {}
 
     while True:
         line = open_input_sam.readline()
@@ -217,6 +230,12 @@ def dedupe(
             strand=strand,
             umi=umi
         )
+
+        # add umi if not in duplicate dict
+        if umi not in duplicate_dict:
+            barcode_to_duplicate_dict(
+                duplicate_dict = duplicate_dict,
+                umi = umi)
 
         # new chromosome encountered
         if rname != current_chr:
@@ -266,6 +285,19 @@ def dedupe(
                         'raw_line1':line,
                         'raw_line2':raw_line2
                     }
+                    duplicate_dict = increment_duplicate_dict(
+                            duplicate_dict = duplicate_dict,
+                            umi = umi,
+                            duplicate = False,
+                            paired_end = paired_end
+                        )
+                else:
+                    duplicate_dict = increment_duplicate_dict(
+                            duplicate_dict = duplicate_dict,
+                            umi = umi,
+                            duplicate = True,
+                            paired_end = paired_end
+                        )
                 # remove pair from paired end dict now that it has been transferred to eval_dict
                 paired_end_dict.pop(qname,None)
                 paired_end_dict.pop(rnext,None)
@@ -294,12 +326,31 @@ def dedupe(
                         'qscore1':qscore,
                         'raw_line1':line
                     }
+                    duplicate_dict = increment_duplicate_dict(
+                            duplicate_dict = duplicate_dict,
+                            umi = umi,
+                            duplicate = False,
+                            paired_end = paired_end
+                        )
                 # evaluate whether qscore is higher than current stored qscore
                 elif keep_highest_qscore and eval_dict[postrand]['qscore1'] < qscore:
                     eval_dict[postrand] = {
                         'qscore1':qscore,
                         'raw_line1':line
                     }
+                    duplicate_dict = increment_duplicate_dict(
+                            duplicate_dict = duplicate_dict,
+                            umi = umi,
+                            duplicate = True,
+                            paired_end = paired_end
+                        )
+                else:
+                    duplicate_dict = increment_duplicate_dict(
+                            duplicate_dict = duplicate_dict,
+                            umi = umi,
+                            duplicate = True,
+                            paired_end = paired_end
+                        )
             elif not randomer_umi:
                 if umi in umis:
                     if postrand not in eval_dict:
@@ -307,12 +358,31 @@ def dedupe(
                             'qscore1':qscore,
                             'raw_line1':line
                         }
+                        duplicate_dict = increment_duplicate_dict(
+                            duplicate_dict = duplicate_dict,
+                            umi = umi,
+                            duplicate = False,
+                            paired_end = paired_end
+                        )
                     # evaluate whether qscore is higher than current stored qscore
                     elif keep_highest_qscore and eval_dict[postrand]['qscore1'] < qscore:
                         eval_dict[postrand] = {
                             'qscore1':qscore,
                             'raw_line1':line
                         }
+                        duplicate_dict = increment_duplicate_dict(
+                            duplicate_dict = duplicate_dict,
+                            umi = umi,
+                            duplicate = True,
+                            paired_end = paired_end
+                        )
+                    else:
+                        duplicate_dict = increment_duplicate_dict(
+                            duplicate_dict = duplicate_dict,
+                            umi = umi,
+                            duplicate = True,
+                            paired_end = paired_end
+                        )
                 else:
                     incorrect_umi += 1
 
@@ -409,6 +479,7 @@ def correct_start_position(
         'M': +1,
         'S': +1,
         'N': +1,
+        'H': +1
     }
 
     # amake position correction based on cigar string
@@ -429,7 +500,7 @@ def correct_start_position(
                 correction = sum(list(map(int,cigar_nums))) # convert to ints before summing
                 corrected_pos = corrected_pos + correction # could put minus one here, but as long as it's consistent it doesn't matter
             except TypeError:
-                print(pos,cigar,strand,cigar_nums,cigar_letters)
+                print('TypeError in CIGAR string. Please investigate.')
                 pass
     return corrected_pos
 
@@ -509,6 +580,36 @@ def determine_strandedness(
         strand = "+" # forward
     return strand
 
+def barcode_to_duplicate_dict(
+    duplicate_dict:dict,
+    umi:str) -> dict:
+    """
+    Adds new umi to duplicate dict
+    """
+    duplicate_dict[umi] = {'duplicate_reads': 0, 'total_reads': 0}
+    return duplicate_dict
+
+def increment_duplicate_dict(
+    duplicate_dict:dict,
+    umi:str,
+    duplicate:bool,
+    paired_end:bool=paired_end) -> dict:
+    """
+    Updates the duplicate counter dictionary.
+
+    Note: anytime the eval_dict is updated, the duplicate_dict must be updated too
+
+    {'umi': {'duplicate_reads': 0, 'total_reads': 0}}
+    """
+    if paired_end:
+        increment = 2
+    elif not paired_end:
+        increment = 1
+
+    duplicate_dict[umi]['total_reads'] += increment
+    if duplicate:
+        duplicate_dict[umi]['duplicate_reads'] += increment
+    return duplicate_dict
 
 # read in umi file if umis specified
 if args.umi is not None:

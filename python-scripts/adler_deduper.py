@@ -5,6 +5,7 @@ import argparse
 import sys
 import re
 from Bioinfo import convert_phred, qual_score
+import csv
 
 
 # define arguments
@@ -33,6 +34,11 @@ def parse_args(args):
         "--keep_highest_qscore",
         action="store_true",
         help="When flag is set, if the program finds a PCR duplicate, it will keep the duplicate with the highest qscore."
+    )
+    parser.add_argument(
+        "-s",
+        "--stats_file",
+        help="Path and file name of duplicate stats file"
     )
     return parser.parse_args(args)
 
@@ -64,6 +70,9 @@ if args.umi is None:
     print('Randomer umi indicated.')
 if args.paired and args.keep_highest_qscore:
     exit("ATTENTION: Exiting script!\nPaired end highest qscore functionality not yet implemented.")
+if args.stats_file is not None:
+    duplicate_dict_file = args.stats_file
+    print("Duplicate stats file:", duplicate_dict_file)
 
 # initiate all dictionaries
 paired_end_dict:dict = {} # paired_end_dict = {qname + '1': {'postrand': (pos, strand, umi), 'qscore1': qscore, 'raw_line1': rawline}}
@@ -487,7 +496,7 @@ def correct_start_position(
     # amake position correction based on cigar string
     if strand == "+":
         # subtract the first soft clip on the forward
-        if cigar_letters[0] == 'S':
+        if cigar_letters[0] == 'S' or cigar_letters[0] == 'H': # TODO: need to evaluate the hard clipping
             correction = cigar_nums[0]
             corrected_pos = corrected_pos - correction
     elif strand == "-":
@@ -613,19 +622,45 @@ def increment_duplicate_dict(
         duplicate_dict[umi]['duplicate_reads'] += increment
     return duplicate_dict
 
-# read in umi file if umis specified
-if args.umi is not None:
-    umis = read_umis(umi_filename=umi_filename)
+def output_duplicate_dict(
+    duplicate_dict:dict,
+    duplicate_dict_file:str) -> None:
+    """
+    Writes duplicate dict to file.
+    """
+    with open(duplicate_dict_file, 'w') as f:
+        f.write("barcode\tduplicates\ttotal\tperc_duplicates\n")
+        for barcode in duplicate_dict:
+            duplicate_reads = duplicate_dict[barcode]['duplicate_reads']
+            total_reads = duplicate_dict[barcode]['total_reads']
+            try:
+                perc_dupe = round(duplicate_reads / total_reads * 100,2)
+            except ZeroDivisionError:
+                perc_dupe = 0.00
+            f.write("%s\t%s\t%s\t%s\n" % (barcode, duplicate_reads, total_reads, perc_dupe))
+    return None
 
-# run dedupe
-dedupe(
-    input_filename=input_filename,
-    retention_filename=retain_filename,
-    summary_dict=summary_dict,
-    eval_dict=eval_dict,
-    paired_end_dict=paired_end_dict,
-    paired_end=paired_end
-)
+def main():
 
-print(duplicate_dict)
+    # read in umi file if umis specified
+    if args.umi is not None:
+        umis = read_umis(umi_filename=umi_filename)
 
+    # run dedupe
+    dedupe(
+        input_filename=input_filename,
+        retention_filename=retain_filename,
+        summary_dict=summary_dict,
+        eval_dict=eval_dict,
+        paired_end_dict=paired_end_dict,
+        paired_end=paired_end
+    )
+
+    output_duplicate_dict(
+        duplicate_dict = duplicate_dict,
+        duplicate_dict_file = duplicate_dict_file
+    )
+
+if __name__ == '__main__':
+    main()
+    

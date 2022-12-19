@@ -27,13 +27,13 @@ def parse_args():
         default = sys.stdout
     )
     parser.add_argument(
-        "-p", 
-        "--paired", 
-        action="store_true", 
+        "-p",
+        "--paired",
+        action="store_true",
         help="Designates file is paired end. If flag is not set, the program will assume single end reads.")
     parser.add_argument(
-        "-u", 
-        "--umi", 
+        "-u",
+        "--umi",
         help="Designates UMI file. If set, UMI file should follow flag. If flag is not set, the program will assume randomer UMI")
     parser.add_argument(
         "-q",
@@ -45,6 +45,12 @@ def parse_args():
         "-s",
         "--stats_file",
         help="Path and file name of duplicate stats file"
+    )
+    parser.add_argument(
+        "-b",
+        "--barcode_position",
+        help = "Position of barcode in qname. 1 = barcode before colon. 2 = barcode after colon.",
+        type = int
     )
     args = parser.parse_args()
     return args
@@ -84,7 +90,9 @@ def dedupe(
     total_reads:int,
     num_reads_retained:int,
     incorrect_umi:int,
-    randomer_umi:bool = True):
+    randomer_umi:bool = True,
+    barcode_position:int = 1,
+    keep_highest_qscore:bool = False):
     """
     Deduplicates the input SAM file.
 
@@ -98,7 +106,7 @@ def dedupe(
         A dictionary to hold summary items. Chromosome, num_headers, lines retained, incorrect umis, and total reads.
     eval_dict : dict
         The dictionary used to hold reads that will be written to retnetion file at the end of each chromosome.
-        
+
         Structure:
         ----------
         SINGLE-END:
@@ -129,7 +137,7 @@ def dedupe(
             qname + '1': {
                 'postrand':postrand,
                 'qscore1':qscore,
-                'raw_line1':raw_line 
+                'raw_line1':raw_line
             }
 
     duplicate_dict : dict
@@ -179,13 +187,13 @@ def dedupe(
         # process header lines
         if line[0] == '@':
             retention_filename.write(line)
-            header_length += 1 
+            header_length += 1
             continue
         total_reads += 1 # made it through all evalutation steps
 
         # generate all of our values for the current read
         split_line = line.split('\t')
-        qname, umi, flag, rname, pos, cigar, rnext, qscore = parse_columns(split_line)
+        qname, umi, flag, rname, pos, cigar, rnext, qscore = parse_columns(split_line, barcode_position)
         strand = determine_strandedness(flag)
         cigar_nums, cigar_letters = parse_cigar_string(cigar=cigar)
         corrected_pos = correct_start_position(
@@ -204,7 +212,7 @@ def dedupe(
 
         # add umi if not in duplicate dict
         if umi not in duplicate_dict:
-            barcode_to_duplicate_dict(
+            duplicate_dict = barcode_to_duplicate_dict(
                 duplicate_dict = duplicate_dict,
                 umi = umi)
 
@@ -212,7 +220,7 @@ def dedupe(
         if rname != current_chr:
             summary_dict[current_chr] = len(eval_dict)
             current_chr = rname
-            
+
             if paired_end:
                 # # write unpaired reads to sam
                 # for unpaired_read in paired_end_dict:
@@ -243,7 +251,7 @@ def dedupe(
                 # place positive read first in combo
                 if postrand[1] == '+':
                     combo_postrand = postrand + pair_postrand
-                elif pair_postrand[1] == '+':
+                else:
                     combo_postrand = pair_postrand + postrand
                 # write pair to eval_dict if combo key doesn't already exist
                 if combo_postrand not in eval_dict:
@@ -359,7 +367,7 @@ def dedupe(
 
     # open_input_sam.close()
     # open_retain_sam.close()
-    
+
     # finish up and print summary dict
     summary_dict['header_length'] = header_length
     summary_dict['total_reads'] = total_reads
@@ -371,7 +379,8 @@ def dedupe(
         logging.info(statement)
 
 def parse_columns(
-    split_line:list=None):
+    split_line:list=None,
+    barcode_position:int=1):
     """"
     Splits the current SAM file line into its component pieces.
 
@@ -400,7 +409,7 @@ def parse_columns(
         The average qscore fo the current SAM file read.
     """
     qname = split_line[0]
-    umi = qname.split(':')[0]
+    umi = qname.split(':')[barcode_position - 1] # -1 accounts for python zero indexing
     flag = int(split_line[1])
     rname = split_line[2]
     pos = int(split_line[3])
@@ -413,7 +422,7 @@ def parse_columns(
     return qname, umi, flag, rname, pos, cigar, rnext, qscore
 
 def correct_start_position(
-    pos:int=None, 
+    pos:int=None,
     cigar:str=None,
     strand:str=None,
     cigar_nums:list=None,
@@ -434,17 +443,17 @@ def correct_start_position(
     --------
     self.corrected_pos : int
         The corrected position based on the input parameters
-        
+
     """
 
     # initiate corrected postiion
     corrected_pos = pos
-    
+
     # split the cigar string into nums and letters
     cigar_nums, cigar_letters = parse_cigar_string(
         cigar=cigar
     )
-    
+
     # TODO: add hard clipping
     minus_strand_map = {
         'D': +1,
@@ -496,7 +505,8 @@ def parse_cigar_string(
     """
     # parse into components
     cigar_nums = re.split("[A-Z]",cigar)
-    cigar_nums.remove("")
+    if "" in cigar_nums:
+        cigar_nums.remove("")
     cigar_nums = [int(num) for num in cigar_nums]
     cigar_letters = re.split("[0-9]+",cigar)
     cigar_letters.remove("")
@@ -522,8 +532,8 @@ def generate_postrand(
     Returns:
     --------
     postrand : tuple
-        A tuple to be used as the reads unique key. 
-        
+        A tuple to be used as the reads unique key.
+
         Structure:
         ----------
         (corrected_pos, strand, umi)
@@ -663,7 +673,8 @@ def main():
         paired_end=paired_end,
         total_reads = total_reads,
         num_reads_retained = num_reads_retained,
-        incorrect_umi = incorrect_umi
+        incorrect_umi = incorrect_umi,
+        barcode_position = args.barcode_position
     )
 
     # output_duplicate_dict(
@@ -677,4 +688,4 @@ if __name__ == '__main__':
         level = logging.INFO
     )
     main()
-    
+
